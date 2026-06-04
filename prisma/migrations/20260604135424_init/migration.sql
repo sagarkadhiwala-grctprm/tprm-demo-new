@@ -1,6 +1,6 @@
 -- CreateTable
 CREATE TABLE "Vendor" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "companyName" TEXT NOT NULL,
     "serviceType" TEXT NOT NULL,
     "dataTypes" TEXT NOT NULL,
@@ -11,13 +11,15 @@ CREATE TABLE "Vendor" (
     "tier" INTEGER NOT NULL,
     "tierRationale" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'pending_assessment',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Vendor_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Assessment" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "vendorId" TEXT NOT NULL,
     "questions" TEXT NOT NULL,
     "responses" TEXT NOT NULL,
@@ -27,7 +29,11 @@ CREATE TABLE "Assessment" (
     "aiNarrative" TEXT NOT NULL,
     "keyFindings" TEXT NOT NULL,
     "recommendations" TEXT NOT NULL,
-    "completedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "status" TEXT NOT NULL DEFAULT 'completed',
-    CONSTRAINT "Assessment_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "Vendor" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+
+    CONSTRAINT "Assessment_pkey" PRIMARY KEY ("id")
 );
+
+-- AddForeignKey
+ALTER TABLE "Assessment" ADD CONSTRAINT "Assessment_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "Vendor"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
