@@ -1,18 +1,24 @@
+import { NextResponse } from 'next/server'
+import Anthropic from '@anthropic-ai/sdk'
+import { prisma } from '@/lib/prisma'
+
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-import { NextResponse } from 'next/server'
-import { callClaude } from '@/lib/claude'
-import { prisma } from '@/lib/prisma'
-import { AssessmentQuestion, ScoreResult } from '@/lib/types'
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+})
 
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { vendorId, questions, responses } = body as {
-      vendorId: string
-      questions: AssessmentQuestion[]
-      responses: Record<string, string>
+    const { vendorId, questions, responses } = body
+
+    if (!vendorId || !questions || !responses) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      )
     }
 
     const vendor = await prisma.vendor.findUnique({
@@ -20,60 +26,71 @@ export async function POST(request: Request) {
     })
 
     if (!vendor) {
-      return NextResponse.json({ error: 'Vendor not found' }, { status: 404 })
+      return NextResponse.json(
+        { error: 'Vendor not found' },
+        { status: 404 }
+      )
     }
 
     const qaBlock = questions
-      .map((q) => {
+      .map((q: { id: string; question: string; category: string }) => {
         const answer = responses[q.id] || '(no answer provided)'
-        return `Question: ${q.question} | Category: ${q.category} | Answer: ${answer}`
+        return `Question ID: ${q.id}\nQuestion: ${q.question}\nCategory: ${q.category}\nAnswer: ${answer}`
       })
-      .join('\n\n')
+      .join('\n\n---\n\n')
 
-    const prompt = `You are a senior TPRM analyst reviewing a vendor's risk assessment responses.
+    const questionIds = questions.map((q: { id: string }) => q.id).join(', ')
+
+    const prompt = `You are a senior TPRM analyst reviewing a vendor risk assessment.
 
 Vendor: ${vendor.companyName}
-Service Type: ${vendor.serviceType}  
+Service Type: ${vendor.serviceType}
 Risk Tier: ${vendor.tier}
 
-Below are the assessment questions and the vendor's responses.
-Analyze each response carefully for completeness, quality of controls described,
-and any red flags or gaps.
-
+Questions and Responses:
 ${qaBlock}
 
-Return ONLY valid JSON, no other text:
+Analyze each response for completeness, quality of controls, and risk gaps.
+
+Return ONLY a valid JSON object, no markdown, no backticks, no explanation:
 {
-  "scores": {
-    "q1": 75,
-    "q2": 45
-  },
-  "overallScore": 62,
+  "scores": { ${questions.map((q: { id: string }) => `"${q.id}": 70`).join(', ')} },
+  "overallScore": 65,
   "riskLevel": "Medium",
-  "aiNarrative": "A detailed 4-5 sentence paragraph summarizing the overall risk posture of this vendor. Mention specific strengths and weaknesses observed in their responses. Be specific and professional.",
-  "keyFindings": [
-    "Finding 1 — specific observation from the responses",
-    "Finding 2 — specific observation from the responses",
-    "Finding 3 — specific observation from the responses"
-  ],
-  "recommendations": [
-    "Action 1 — specific recommended remediation or follow-up",
-    "Action 2 — specific recommended remediation or follow-up",
-    "Action 3 — specific recommended remediation or follow-up"
-  ]
+  "aiNarrative": "Write 4-5 sentences summarizing this vendor risk posture with specific observations.",
+  "keyFindings": ["Finding 1", "Finding 2", "Finding 3"],
+  "recommendations": ["Action 1", "Action 2", "Action 3"]
 }
 
-Scoring guide:
-- 80-100: Strong, comprehensive response with evidence of mature controls
-- 60-79: Adequate response, some gaps but manageable
-- 40-59: Weak response, significant gaps identified  
-- 0-39: Inadequate or missing response, major risk flag
+Rules:
+- scores must include a number 0-100 for EVERY question id: ${questionIds}
+- riskLevel must be exactly one of: Low, Medium, High, Critical
+- overallScore must be a number 0-100
+- return ONLY the JSON object, nothing else`
 
-riskLevel must be one of: "Low", "Medium", "High", "Critical"
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: prompt }],
+    })
 
-Include a score for every question id: ${questions.map((q) => q.id).join(', ')}`
+    const rawText =
+      response.content[0].type === 'text' ? response.content[0].text : ''
 
-    const result = await callClaude<ScoreResult>(prompt)
+    const cleaned = rawText
+      .replace(/```json/g, '')
+      .replace(/```/g, '')
+      .trim()
+
+    let result
+    try {
+      result = JSON.parse(cleaned)
+    } catch {
+      return NextResponse.json(
+        { error: 'AI returned invalid JSON', raw: cleaned },
+        { status: 500 }
+      )
+    }
 
     const assessment = await prisma.assessment.create({
       data: {
@@ -81,7 +98,7 @@ Include a score for every question id: ${questions.map((q) => q.id).join(', ')}`
         questions: JSON.stringify(questions),
         responses: JSON.stringify(responses),
         scores: JSON.stringify(result.scores),
-        overallScore: result.overallScore,
+        overallScore: Number(result.overallScore),
         riskLevel: result.riskLevel,
         aiNarrative: result.aiNarrative,
         keyFindings: JSON.stringify(result.keyFindings),
@@ -97,9 +114,9 @@ Include a score for every question id: ${questions.map((q) => q.id).join(', ')}`
 
     return NextResponse.json(assessment)
   } catch (error) {
-    console.error('Error:', error)
+    console.error('Score API error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: String(error) },
       { status: 500 }
     )
   }

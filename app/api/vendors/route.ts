@@ -1,10 +1,13 @@
+import { NextResponse } from 'next/server'
+import Anthropic from '@anthropic-ai/sdk'
+import { prisma } from '@/lib/prisma'
+
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-import { NextResponse } from 'next/server'
-import { callClaude } from '@/lib/claude'
-import { prisma } from '@/lib/prisma'
-import { TierClassification, VendorFormData } from '@/lib/types'
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+})
 
 export async function GET(request: Request) {
   try {
@@ -48,9 +51,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json(result)
   } catch (error) {
-    console.error('Error:', error)
+    console.error('Vendors GET API error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: String(error) },
       { status: 500 }
     )
   }
@@ -58,13 +61,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as VendorFormData & {
-      serviceDescription: string
-    }
+    const body = await request.json()
 
     const dataTypesStr = Array.isArray(body.dataTypes)
       ? body.dataTypes.join(', ')
-      : String(body.dataTypes)
+      : String(body.dataTypes ?? '')
 
     const prompt = `You are a senior TPRM (Third Party Risk Management) analyst at a global bank.
 
@@ -88,14 +89,36 @@ Vendor Profile:
 - Substitutability: ${body.substitutability}
 - Uses Sub-contractors: ${body.subcontractors}
 
-Return ONLY valid JSON, no other text:
+Return ONLY a valid JSON object, no markdown, no backticks, no explanation:
 {
   "tier": 1,
   "rationale": "2-sentence explanation of why this tier was assigned",
   "keyRiskFactors": ["factor1", "factor2", "factor3"]
 }`
 
-    const classification = await callClaude<TierClassification>(prompt)
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: prompt }],
+    })
+
+    const rawText =
+      response.content[0].type === 'text' ? response.content[0].text : ''
+
+    const cleaned = rawText
+      .replace(/```json/g, '')
+      .replace(/```/g, '')
+      .trim()
+
+    let classification
+    try {
+      classification = JSON.parse(cleaned)
+    } catch {
+      return NextResponse.json(
+        { error: 'AI returned invalid JSON', raw: cleaned },
+        { status: 500 }
+      )
+    }
 
     const vendor = await prisma.vendor.create({
       data: {
@@ -117,9 +140,9 @@ Return ONLY valid JSON, no other text:
       keyRiskFactors: classification.keyRiskFactors,
     })
   } catch (error) {
-    console.error('Error:', error)
+    console.error('Vendors POST API error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: String(error) },
       { status: 500 }
     )
   }
