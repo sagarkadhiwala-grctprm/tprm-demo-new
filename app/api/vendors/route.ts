@@ -1,10 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server'
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
+import { NextResponse } from 'next/server'
 import { callClaude } from '@/lib/claude'
 import { prisma } from '@/lib/prisma'
 import { TierClassification, VendorFormData } from '@/lib/types'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    void request
     const vendors = await prisma.vendor.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
@@ -44,15 +48,15 @@ export async function GET() {
 
     return NextResponse.json(result)
   } catch (error) {
-    console.error('GET /api/vendors error:', error)
+    console.error('Error:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch vendors' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const body = (await request.json()) as VendorFormData & {
       serviceDescription: string
@@ -113,13 +117,9 @@ Return ONLY valid JSON, no other text:
       keyRiskFactors: classification.keyRiskFactors,
     })
   } catch (error) {
-    console.error('POST /api/vendors error:', error)
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Failed to classify and save vendor'
+    console.error('Error:', error)
     return NextResponse.json(
-      { error: `Claude API or database error: ${message}` },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

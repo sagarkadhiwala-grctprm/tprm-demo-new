@@ -1,9 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server'
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
+import { NextResponse } from 'next/server'
 import { callClaude } from '@/lib/claude'
 import { prisma } from '@/lib/prisma'
 import { AssessmentQuestion, ScoreResult } from '@/lib/types'
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const body = await request.json()
     const { vendorId, questions, responses } = body as {
@@ -94,11 +97,9 @@ Include a score for every question id: ${questions.map((q) => q.id).join(', ')}`
 
     return NextResponse.json(assessment)
   } catch (error) {
-    console.error('POST /api/assess/score error:', error)
-    const message =
-      error instanceof Error ? error.message : 'Failed to score assessment'
+    console.error('Error:', error)
     return NextResponse.json(
-      { error: `Claude API or database error: ${message}` },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

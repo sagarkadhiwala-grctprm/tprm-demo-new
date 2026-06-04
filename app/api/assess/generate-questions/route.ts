@@ -1,8 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
+import { NextResponse } from 'next/server'
 import { callClaude } from '@/lib/claude'
 import { AssessmentQuestion } from '@/lib/types'
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const body = await request.json()
     const { companyName, serviceType, dataTypes, tier } = body
@@ -44,13 +47,9 @@ Generate exactly 8 questions total.`
 
     return NextResponse.json(questions)
   } catch (error) {
-    console.error('POST /api/assess/generate-questions error:', error)
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Failed to generate assessment questions'
+    console.error('Error:', error)
     return NextResponse.json(
-      { error: `Claude API error: ${message}` },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

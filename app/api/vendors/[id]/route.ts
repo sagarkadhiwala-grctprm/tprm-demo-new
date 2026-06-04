@@ -1,11 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server'
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
 export async function GET(
-  _request: NextRequest,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    void request
     const vendor = await prisma.vendor.findUnique({
       where: { id: params.id },
       include: {
@@ -21,9 +25,9 @@ export async function GET(
 
     return NextResponse.json(vendor)
   } catch (error) {
-    console.error('GET /api/vendors/[id] error:', error)
+    console.error('Error:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch vendor' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }
