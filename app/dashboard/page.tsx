@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import TierBadge from '@/components/TierBadge'
 import { TableSkeleton } from '@/components/LoadingSkeleton'
-import { formatDate } from '@/lib/utils'
+import { formatDate, riskLevelColor } from '@/lib/utils'
 import { VendorWithAssessment } from '@/lib/types'
 
 type SortKey =
@@ -39,9 +39,15 @@ export default function DashboardPage() {
 
   const stats = useMemo(() => ({
     total: vendors.length,
-    tier1: vendors.filter((v) => v.tier === 1).length,
-    tier2: vendors.filter((v) => v.tier === 2).length,
-    tier3: vendors.filter((v) => v.tier === 3).length,
+    pending: vendors.filter((v) => v.status === 'pending_assessment').length,
+    criticalRisk: vendors.filter((v) => v.inherentRiskRating === 'Critical').length,
+    highRisk: vendors.filter((v) => v.inherentRiskRating === 'High').length,
+    approved: vendors.filter(
+      (v) => v.latestAssessment?.approvalStatus === 'approved'
+    ).length,
+    awaitingApproval: vendors.filter(
+      (v) => v.latestAssessment?.approvalStatus === 'pending'
+    ).length,
   }), [vendors])
 
   const filtered = useMemo(() => {
@@ -130,22 +136,30 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         <div className="bg-card rounded-xl border border-white/10 p-5">
           <p className="text-secondary text-sm mb-1">Total Vendors</p>
           <p className="text-3xl font-bold">{stats.total}</p>
         </div>
-        <div className="bg-card rounded-xl border border-danger/30 p-5">
-          <p className="text-danger text-sm mb-1">Tier 1 — Critical</p>
-          <p className="text-3xl font-bold text-danger">{stats.tier1}</p>
-        </div>
         <div className="bg-card rounded-xl border border-warning/30 p-5">
-          <p className="text-warning text-sm mb-1">Tier 2 — Moderate</p>
-          <p className="text-3xl font-bold text-warning">{stats.tier2}</p>
+          <p className="text-warning text-sm mb-1">Pending Assessment</p>
+          <p className="text-3xl font-bold text-warning">{stats.pending}</p>
+        </div>
+        <div className="bg-card rounded-xl border border-danger/30 p-5">
+          <p className="text-danger text-sm mb-1">Critical Risk</p>
+          <p className="text-3xl font-bold text-danger">{stats.criticalRisk}</p>
+        </div>
+        <div className="bg-card rounded-xl border border-orange-500/30 p-5">
+          <p className="text-orange-400 text-sm mb-1">High Risk</p>
+          <p className="text-3xl font-bold text-orange-400">{stats.highRisk}</p>
         </div>
         <div className="bg-card rounded-xl border border-success/30 p-5">
-          <p className="text-success text-sm mb-1">Tier 3 — Low Risk</p>
-          <p className="text-3xl font-bold text-success">{stats.tier3}</p>
+          <p className="text-success text-sm mb-1">Approved</p>
+          <p className="text-3xl font-bold text-success">{stats.approved}</p>
+        </div>
+        <div className="bg-card rounded-xl border border-primary/30 p-5">
+          <p className="text-primary text-sm mb-1">Awaiting Approval</p>
+          <p className="text-3xl font-bold text-primary">{stats.awaitingApproval}</p>
         </div>
       </div>
 
@@ -172,8 +186,15 @@ export default function DashboardPage() {
                   <SortHeader label="Company Name" col="companyName" />
                   <SortHeader label="Service Type" col="serviceType" />
                   <SortHeader label="Tier" col="tier" />
-                  <SortHeader label="Risk Score" col="overallScore" />
-                  <SortHeader label="Status" col="status" />
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase">
+                    Inherent Risk
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase">
+                    Residual Risk
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase">
+                    Approval Status
+                  </th>
                   <SortHeader label="Date Registered" col="createdAt" />
                   <th className="px-4 py-3 text-left text-xs font-semibold text-secondary uppercase">
                     Actions
@@ -183,7 +204,7 @@ export default function DashboardPage() {
               <tbody className="divide-y divide-white/10">
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-secondary">
+                    <td colSpan={8} className="px-4 py-12 text-center text-secondary">
                       No vendors found.{' '}
                       <Link href="/onboard" className="text-primary hover:underline">
                         Register your first vendor
@@ -191,55 +212,82 @@ export default function DashboardPage() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((vendor) => (
-                    <tr key={vendor.id} className="hover:bg-white/5 transition-colors">
-                      <td className="px-4 py-4 font-medium whitespace-nowrap">
-                        {vendor.companyName}
-                      </td>
-                      <td className="px-4 py-4 text-secondary text-sm whitespace-nowrap">
-                        {vendor.serviceType}
-                      </td>
-                      <td className="px-4 py-4">
-                        <TierBadge tier={vendor.tier} />
-                      </td>
-                      <td className="px-4 py-4 text-sm">
-                        {vendor.latestAssessment
-                          ? `${vendor.latestAssessment.overallScore}/100`
-                          : '—'}
-                      </td>
-                      <td className="px-4 py-4">
-                        {vendor.status === 'completed' ? (
-                          <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-success/20 text-success">
-                            Assessed
+                  filtered.map((vendor) => {
+                    const inherentRiskRating = vendor.inherentRiskRating || 'Low'
+                    const residualRiskRating =
+                      vendor.latestAssessment?.residualRiskRating ?? null
+                    const approvalStatus =
+                      vendor.latestAssessment?.approvalStatus ?? null
+
+                    return (
+                      <tr key={vendor.id} className="hover:bg-white/5 transition-colors">
+                        <td className="px-4 py-4 font-medium whitespace-nowrap">
+                          {vendor.companyName}
+                        </td>
+                        <td className="px-4 py-4 text-secondary text-sm whitespace-nowrap">
+                          {vendor.serviceType}
+                        </td>
+                        <td className="px-4 py-4">
+                          <TierBadge tier={vendor.tier} />
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${riskLevelColor(inherentRiskRating)}`}>
+                            {inherentRiskRating}
                           </span>
-                        ) : (
-                          <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-warning/20 text-warning">
-                            Awaiting Assessment
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-secondary text-sm whitespace-nowrap">
-                        {formatDate(vendor.createdAt)}
-                      </td>
-                      <td className="px-4 py-4">
-                        {vendor.status === 'completed' && vendor.latestAssessment ? (
-                          <Link
-                            href={`/report/${vendor.latestAssessment.id}`}
-                            className="text-sm text-primary hover:underline whitespace-nowrap"
-                          >
-                            View Report
-                          </Link>
-                        ) : (
-                          <Link
-                            href={`/assess/${vendor.id}`}
-                            className="text-sm text-primary hover:underline whitespace-nowrap"
-                          >
-                            Start Assessment
-                          </Link>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="px-4 py-4">
+                          {residualRiskRating ? (
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${riskLevelColor(residualRiskRating)}`}>
+                              {residualRiskRating}
+                            </span>
+                          ) : (
+                            <span className="text-secondary text-sm">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4">
+                          {approvalStatus ? (
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                              approvalStatus === 'approved' ? 'bg-success/20 text-success' :
+                              approvalStatus === 'rejected' ? 'bg-danger/20 text-danger' :
+                              'bg-warning/20 text-warning'
+                            }`}>
+                              {approvalStatus.charAt(0).toUpperCase() + approvalStatus.slice(1)}
+                            </span>
+                          ) : (
+                            <span className="text-secondary text-sm">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-secondary text-sm whitespace-nowrap">
+                          {formatDate(vendor.createdAt)}
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex gap-3">
+                            {vendor.status === 'completed' && vendor.latestAssessment ? (
+                              <Link
+                                href={`/report/${vendor.latestAssessment.id}`}
+                                className="text-sm text-primary hover:underline whitespace-nowrap"
+                              >
+                                View Report
+                              </Link>
+                            ) : (
+                              <Link
+                                href={`/assess/${vendor.id}`}
+                                className="text-sm text-primary hover:underline whitespace-nowrap"
+                              >
+                                Start Assessment
+                              </Link>
+                            )}
+                            <Link
+                              href={`/vendors/${vendor.id}/edit`}
+                              className="text-sm text-secondary hover:text-primary whitespace-nowrap"
+                            >
+                              Edit
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
             </table>

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/prisma'
+import { calculateInherentRisk } from '@/lib/inherent-risk'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -36,6 +37,10 @@ export async function GET(request: Request) {
         tier: vendor.tier,
         tierRationale: vendor.tierRationale,
         status: vendor.status,
+        inherentLikelihood: vendor.inherentLikelihood,
+        inherentImpact: vendor.inherentImpact,
+        inherentRiskScore: vendor.inherentRiskScore,
+        inherentRiskRating: vendor.inherentRiskRating,
         createdAt: vendor.createdAt,
         updatedAt: vendor.updatedAt,
         latestAssessment: latest
@@ -43,6 +48,8 @@ export async function GET(request: Request) {
               id: latest.id,
               overallScore: latest.overallScore,
               riskLevel: latest.riskLevel,
+              residualRiskRating: latest.residualRiskRating,
+              approvalStatus: latest.approvalStatus,
               completedAt: latest.completedAt,
             }
           : null,
@@ -66,6 +73,15 @@ export async function POST(request: Request) {
     const dataTypesStr = Array.isArray(body.dataTypes)
       ? body.dataTypes.join(', ')
       : String(body.dataTypes ?? '')
+
+    const inherentRisk = calculateInherentRisk({
+      dataCategories: body.dataCategories,
+      geographicPresence: body.geographicPresence,
+      certifications: body.certifications,
+      substitutability: body.substitutability,
+      criticality: body.criticality,
+      dataVolume: body.dataVolume,
+    })
 
     const prompt = `You are a senior TPRM (Third Party Risk Management) analyst at a global bank.
 
@@ -132,6 +148,26 @@ Return ONLY a valid JSON object, no markdown, no backticks, no explanation:
         tier: classification.tier,
         tierRationale: classification.rationale,
         status: 'pending_assessment',
+        natureOfBusiness: body.natureOfBusiness ?? null,
+        productsServices: body.productsServices ?? body.serviceDescription ?? null,
+        dataCategories: Array.isArray(body.dataCategories)
+          ? JSON.stringify(body.dataCategories)
+          : null,
+        dataVolume: body.dataVolume ?? null,
+        dataRetentionPeriod: body.dataRetentionPeriod ?? null,
+        geographicPresence: Array.isArray(body.geographicPresence)
+          ? JSON.stringify(body.geographicPresence)
+          : null,
+        certifications: Array.isArray(body.certifications)
+          ? JSON.stringify(body.certifications)
+          : null,
+        regulatoryBodies: Array.isArray(body.regulatoryBodies)
+          ? JSON.stringify(body.regulatoryBodies)
+          : null,
+        inherentLikelihood: inherentRisk.likelihood,
+        inherentImpact: inherentRisk.impact,
+        inherentRiskScore: inherentRisk.score,
+        inherentRiskRating: inherentRisk.rating,
       },
     })
 

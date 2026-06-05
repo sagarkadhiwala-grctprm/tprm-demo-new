@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { calculateInherentRisk } from '@/lib/inherent-risk'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -26,6 +27,69 @@ export async function GET(
     return NextResponse.json(vendor)
   } catch (error) {
     console.error('Vendor GET API error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error', details: String(error) },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const body = await request.json()
+
+    const dataTypesStr = Array.isArray(body.dataTypes)
+      ? body.dataTypes.join(', ')
+      : String(body.dataTypes ?? '')
+
+    const inherentRisk = calculateInherentRisk({
+      dataCategories: body.dataCategories,
+      geographicPresence: body.geographicPresence,
+      certifications: body.certifications,
+      substitutability: body.substitutability,
+      criticality: body.criticality,
+      dataVolume: body.dataVolume,
+    })
+
+    const vendor = await prisma.vendor.update({
+      where: { id: params.id },
+      data: {
+        companyName: body.companyName,
+        serviceType: body.serviceType,
+        dataTypes: dataTypesStr,
+        contactEmail: body.contactEmail,
+        contactName: body.contactName,
+        country: body.country,
+        employeeCount: body.employeeCount,
+        natureOfBusiness: body.natureOfBusiness ?? null,
+        productsServices: body.productsServices ?? null,
+        dataCategories: Array.isArray(body.dataCategories)
+          ? JSON.stringify(body.dataCategories)
+          : null,
+        dataVolume: body.dataVolume ?? null,
+        dataRetentionPeriod: body.dataRetentionPeriod ?? null,
+        geographicPresence: Array.isArray(body.geographicPresence)
+          ? JSON.stringify(body.geographicPresence)
+          : null,
+        certifications: Array.isArray(body.certifications)
+          ? JSON.stringify(body.certifications)
+          : null,
+        regulatoryBodies: Array.isArray(body.regulatoryBodies)
+          ? JSON.stringify(body.regulatoryBodies)
+          : null,
+        inherentLikelihood: inherentRisk.likelihood,
+        inherentImpact: inherentRisk.impact,
+        inherentRiskScore: inherentRisk.score,
+        inherentRiskRating: inherentRisk.rating,
+      },
+    })
+
+    return NextResponse.json(vendor)
+  } catch (error) {
+    console.error('Vendor PATCH API error:', error)
     return NextResponse.json(
       { error: 'Internal server error', details: String(error) },
       { status: 500 }

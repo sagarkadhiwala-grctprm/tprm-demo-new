@@ -1,11 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import Link from 'next/link'
-import TierBadge from '@/components/TierBadge'
+import { useState, useEffect } from 'react'
+import { useRouter, useParams } from 'next/navigation'
 import Spinner from '@/components/Spinner'
 import VendorDemographicsSection from '@/components/VendorDemographicsSection'
-import { predictTier } from '@/lib/utils'
+import { safeJsonParse } from '@/lib/json'
 
 const DATA_OPTIONS = [
   'Customer PII (names, addresses, SSNs)',
@@ -27,13 +26,11 @@ const SERVICE_TYPES = [
   'Legal & Compliance',
 ]
 
-interface SavedVendor {
-  id: string
-  tier: number
-  tierRationale: string
-}
+export default function EditVendorPage() {
+  const params = useParams()
+  const router = useRouter()
+  const vendorId = params.id as string
 
-export default function OnboardPage() {
   const [form, setForm] = useState({
     companyName: '',
     country: '',
@@ -46,6 +43,7 @@ export default function OnboardPage() {
     subcontractors: 'no',
     criticality: '',
     substitutability: '',
+    // Section 5 - Vendor Profile & Demographics
     natureOfBusiness: '',
     productsServices: '',
     dataCategories: [] as string[],
@@ -55,14 +53,54 @@ export default function OnboardPage() {
     certifications: [] as string[],
     regulatoryBodies: [] as string[],
   })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [savedVendor, setSavedVendor] = useState<SavedVendor | null>(null)
 
-  const predictedTier = useMemo(
-    () => predictTier(form.dataTypes, form.criticality),
-    [form.dataTypes, form.criticality]
-  )
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+
+  useEffect(() => {
+    async function loadVendor() {
+      try {
+        const res = await fetch(`/api/vendors/${vendorId}`)
+        if (!res.ok) throw new Error('Failed to load vendor')
+        const vendor = await res.json()
+
+        // Parse JSON arrays from database
+        const dataCategories = safeJsonParse<string[]>(vendor.dataCategories, [])
+        const geographicPresence = safeJsonParse<string[]>(vendor.geographicPresence, [])
+        const certifications = safeJsonParse<string[]>(vendor.certifications, [])
+        const regulatoryBodies = safeJsonParse<string[]>(vendor.regulatoryBodies, [])
+
+        setForm({
+          companyName: vendor.companyName || '',
+          country: vendor.country || '',
+          employeeCount: vendor.employeeCount || '',
+          contactName: vendor.contactName || '',
+          contactEmail: vendor.contactEmail || '',
+          serviceType: vendor.serviceType || '',
+          serviceDescription: '',
+          dataTypes: vendor.dataTypes ? vendor.dataTypes.split(', ') : [],
+          subcontractors: 'no',
+          criticality: '',
+          substitutability: '',
+          natureOfBusiness: vendor.natureOfBusiness || '',
+          productsServices: vendor.productsServices || '',
+          dataCategories,
+          dataVolume: vendor.dataVolume || '',
+          dataRetentionPeriod: vendor.dataRetentionPeriod || '',
+          geographicPresence,
+          certifications,
+          regulatoryBodies,
+        })
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load vendor')
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadVendor()
+  }, [vendorId])
 
   const toggleDataType = (label: string) => {
     setForm((prev) => {
@@ -84,26 +122,21 @@ export default function OnboardPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    setLoading(true)
-    setSavedVendor(null)
+    setSaving(true)
 
     try {
-      const res = await fetch('/api/vendors', {
-        method: 'POST',
+      const res = await fetch(`/api/vendors/${vendorId}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Registration failed')
-      setSavedVendor({
-        id: data.id,
-        tier: data.tier,
-        tierRationale: data.tierRationale,
-      })
+      if (!res.ok) throw new Error(data.error || 'Update failed')
+      setSuccess(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
-      setLoading(false)
+      setSaving(false)
     }
   }
 
@@ -114,14 +147,14 @@ export default function OnboardPage() {
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-16">
-        <Spinner text="Classifying vendor risk tier with AI..." />
+        <Spinner text="Loading vendor data..." />
       </div>
     )
   }
 
-  if (savedVendor) {
+  if (success) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-12">
+      <div className="max-w-3xl mx-auto px-4 py-12 space-y-6">
         <div className="bg-card rounded-xl border border-success/30 p-8 text-center">
           <div className="w-16 h-16 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -129,20 +162,14 @@ export default function OnboardPage() {
             </svg>
           </div>
           <h2 className="font-heading text-2xl font-semibold mb-4">
-            Vendor Registered Successfully
+            Vendor Updated Successfully
           </h2>
-          <div className="mb-4">
-            <TierBadge tier={savedVendor.tier} />
-          </div>
-          <p className="text-secondary text-left bg-navy/50 rounded-lg p-4 mb-6 text-sm leading-relaxed">
-            {savedVendor.tierRationale}
-          </p>
-          <Link
-            href={`/assess/${savedVendor.id}`}
+          <button
+            onClick={() => router.push('/dashboard')}
             className="inline-block px-8 py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary/90 transition-colors"
           >
-            Start Risk Assessment
-          </Link>
+            Back to Dashboard
+          </button>
         </div>
       </div>
     )
@@ -150,9 +177,9 @@ export default function OnboardPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-      <h1 className="font-heading text-3xl font-bold mb-2">Vendor Registration</h1>
+      <h1 className="font-heading text-3xl font-bold mb-2">Edit Vendor</h1>
       <p className="text-secondary mb-8">
-        Complete the intake form to register a new third-party vendor for risk assessment.
+        Update vendor information and risk profile.
       </p>
 
       {error && (
@@ -214,13 +241,6 @@ export default function OnboardPage() {
               ))}
             </select>
           </div>
-          <div>
-            <label className={labelClass}>Service Description *</label>
-            <textarea required rows={4} className={inputClass}
-              placeholder="Describe what services you will provide"
-              value={form.serviceDescription}
-              onChange={(e) => setForm({ ...form, serviceDescription: e.target.value })} />
-          </div>
         </section>
 
         <section className="bg-card rounded-xl border border-white/10 p-6 space-y-4">
@@ -236,19 +256,6 @@ export default function OnboardPage() {
                     onChange={() => toggleDataType(opt)}
                     className="mt-1 rounded border-white/20" />
                   <span className="text-sm">{opt}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className={labelClass}>Will they use sub-contractors? *</label>
-            <div className="flex gap-6 mt-2">
-              {['yes', 'no'].map((v) => (
-                <label key={v} className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" name="subcontractors" value={v} required
-                    checked={form.subcontractors === v}
-                    onChange={() => setForm({ ...form, subcontractors: v })} />
-                  <span className="capitalize">{v}</span>
                 </label>
               ))}
             </div>
@@ -290,18 +297,22 @@ export default function OnboardPage() {
           labelClass={labelClass}
         />
 
-        <div className="bg-card rounded-xl border border-primary/30 p-6">
-          <p className="text-sm text-secondary mb-2">Live tier preview (client-side estimate)</p>
-          <p className="font-heading text-lg">
-            Based on your inputs, this vendor will likely be classified as{' '}
-            <span className="text-primary font-bold">Tier {predictedTier}</span>
-          </p>
+        <div className="flex gap-4">
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex-1 py-4 rounded-xl bg-primary text-white font-semibold text-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push('/dashboard')}
+            className="px-8 py-4 rounded-xl bg-navy border border-white/10 text-white font-semibold text-lg hover:bg-white/5 transition-colors"
+          >
+            Cancel
+          </button>
         </div>
-
-        <button type="submit"
-          className="w-full py-4 rounded-xl bg-primary text-white font-semibold text-lg hover:bg-primary/90 transition-colors">
-          Submit Vendor Registration
-        </button>
       </form>
     </div>
   )

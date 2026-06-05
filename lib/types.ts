@@ -38,6 +38,23 @@ export interface VendorFormData {
   subcontractors: string
   criticality: string
   substitutability: string
+  natureOfBusiness?: string
+  productsServices?: string
+  dataCategories?: string[]
+  dataVolume?: string
+  dataRetentionPeriod?: string
+  geographicPresence?: string[]
+  certifications?: string[]
+  regulatoryBodies?: string[]
+}
+
+export interface LatestAssessmentSummary {
+  id: string
+  overallScore: number
+  riskLevel: string
+  residualRiskRating?: string | null
+  approvalStatus?: string | null
+  completedAt: string
 }
 
 export interface VendorWithAssessment {
@@ -52,12 +69,11 @@ export interface VendorWithAssessment {
   tier: number
   tierRationale: string
   status: string
+  inherentLikelihood?: number | null
+  inherentImpact?: number | null
+  inherentRiskScore?: number | null
+  inherentRiskRating?: string | null
   createdAt: string
   updatedAt: string
-  latestAssessment?: {
-    id: string
-    overallScore: number
-    riskLevel: string
-    completedAt: string
-  } | null
+  latestAssessment?: LatestAssessmentSummary | null
 }

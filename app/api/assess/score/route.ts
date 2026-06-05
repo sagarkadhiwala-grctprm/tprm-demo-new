@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/prisma'
+import { calculateResidualRisk } from '@/lib/inherent-risk'
+import {
+  buildDocumentContextForPrompt,
+  parseDocumentAnalysis,
+} from '@/lib/documents'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -41,11 +46,47 @@ export async function POST(request: Request) {
 
     const questionIds = questions.map((q: { id: string }) => q.id).join(', ')
 
+    const analyzedDocs = await prisma.vendorDocument.findMany({
+      where: { vendorId, status: 'analyzed' },
+      select: {
+        fileName: true,
+        documentType: true,
+        aiAnalysis: true,
+        overallRisk: true,
+      },
+    })
+
+    const documentContext = buildDocumentContextForPrompt(analyzedDocs)
+
+    const allDocFlags = analyzedDocs.flatMap((d) => {
+      const a = parseDocumentAnalysis(d.aiAnalysis)
+      return a?.riskFlags || []
+    })
+
+    const documentAnalysisSnapshot = {
+      documentCount: analyzedDocs.length,
+      aggregateDocumentRisk:
+        analyzedDocs.reduce((max, d) => {
+          const order = ['Low', 'Medium', 'High', 'Critical']
+          const r = d.overallRisk || 'Low'
+          return order.indexOf(r) > order.indexOf(max) ? r : max
+        }, 'Low') as string,
+      riskFlagCount: allDocFlags.length,
+      documents: analyzedDocs.map((d) => ({
+        fileName: d.fileName,
+        documentType: d.documentType,
+        overallRisk: d.overallRisk,
+        analysis: parseDocumentAnalysis(d.aiAnalysis),
+      })),
+    }
+
     const prompt = `You are a senior TPRM analyst reviewing a vendor risk assessment.
 
 Vendor: ${vendor.companyName}
 Service Type: ${vendor.serviceType}
 Risk Tier: ${vendor.tier}
+Inherent Risk: ${vendor.inherentRiskRating} (${vendor.inherentRiskScore}/25)
+${documentContext ? `\nCompliance documents reviewed:\n${documentContext}` : ''}
 
 Questions and Responses:
 ${qaBlock}
@@ -92,6 +133,15 @@ Rules:
       )
     }
 
+    const inherentLikelihood = vendor.inherentLikelihood ?? 2
+    const inherentImpact = vendor.inherentImpact ?? 2
+
+    const residual = calculateResidualRisk(
+      inherentLikelihood,
+      inherentImpact,
+      result.scores as Record<string, number>
+    )
+
     const assessment = await prisma.assessment.create({
       data: {
         vendorId,
@@ -103,7 +153,19 @@ Rules:
         aiNarrative: result.aiNarrative,
         keyFindings: JSON.stringify(result.keyFindings),
         recommendations: JSON.stringify(result.recommendations),
+        documentAnalysis: JSON.stringify(documentAnalysisSnapshot),
         status: 'completed',
+        approvalStatus: 'pending',
+        controlEffectivenessScore: residual.controlEffectivenessScore,
+        residualLikelihood: residual.residualLikelihood,
+        residualImpact: residual.residualImpact,
+        residualRiskScore: residual.residualRiskScore,
+        residualRiskRating: residual.residualRiskRating,
+        risksIdentified: residual.risksIdentified,
+        criticalRisks: residual.criticalRisks,
+        highRisks: residual.highRisks,
+        mediumRisks: residual.mediumRisks,
+        lowRisks: residual.lowRisks,
       },
     })
 

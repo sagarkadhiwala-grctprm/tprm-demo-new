@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { safeJsonParse } from '@/lib/json'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -24,11 +25,33 @@ export async function GET(
 
     return NextResponse.json({
       ...assessment,
-      questions: JSON.parse(assessment.questions),
-      responses: JSON.parse(assessment.responses),
-      scores: JSON.parse(assessment.scores),
-      keyFindings: JSON.parse(assessment.keyFindings),
-      recommendations: JSON.parse(assessment.recommendations),
+      questions: safeJsonParse(assessment.questions, []),
+      responses: safeJsonParse(assessment.responses, {}),
+      scores: safeJsonParse(assessment.scores, {}),
+      keyFindings: safeJsonParse(assessment.keyFindings, []),
+      recommendations: safeJsonParse(assessment.recommendations, []),
+      documentAnalysis: assessment.documentAnalysis
+        ? safeJsonParse(assessment.documentAnalysis, null)
+        : null,
+      vendor: {
+        ...assessment.vendor,
+        dataCategories: safeJsonParse(
+          assessment.vendor.dataCategories,
+          []
+        ),
+        geographicPresence: safeJsonParse(
+          assessment.vendor.geographicPresence,
+          []
+        ),
+        certifications: safeJsonParse(
+          assessment.vendor.certifications,
+          []
+        ),
+        regulatoryBodies: safeJsonParse(
+          assessment.vendor.regulatoryBodies,
+          []
+        ),
+      },
     })
   } catch (error) {
     console.error('Assessment GET API error:', error)
