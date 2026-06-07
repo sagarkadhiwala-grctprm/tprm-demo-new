@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import TierBadge from '@/components/TierBadge'
 import Spinner from '@/components/Spinner'
-import DocumentUploadPanel from '@/components/DocumentUploadPanel'
 import { CardSkeleton } from '@/components/LoadingSkeleton'
 import { AssessmentQuestion } from '@/lib/types'
 
@@ -34,15 +33,19 @@ export default function AssessPage() {
   const [loadingVendor, setLoadingVendor] = useState(true)
   const [loadingQuestions, setLoadingQuestions] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [autofilling, setAutofilling] = useState(false)
-  const [hasAnalyzedDocs, setHasAnalyzedDocs] = useState(false)
   const [loadingStep, setLoadingStep] = useState(0)
   const [error, setError] = useState('')
 
-  const loadQuestions = useCallback(async (vendorData: Vendor) => {
-    setLoadingQuestions(true)
+  const loadVendorAndQuestions = useCallback(async () => {
+    setLoadingVendor(true)
     setError('')
     try {
+      const vendorRes = await fetch(`/api/vendors/${vendorId}`)
+      if (!vendorRes.ok) throw new Error('Vendor not found')
+      const vendorData = await vendorRes.json()
+      setVendor(vendorData)
+
+      setLoadingQuestions(true)
       const qRes = await fetch('/api/assess/generate-questions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -62,78 +65,14 @@ export default function AssessPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load assessment')
     } finally {
-      setLoadingQuestions(false)
-    }
-  }, [])
-
-  const loadVendor = useCallback(async () => {
-    setLoadingVendor(true)
-    setError('')
-    try {
-      const vendorRes = await fetch(`/api/vendors/${vendorId}`)
-      if (!vendorRes.ok) throw new Error('Vendor not found')
-      const vendorData = await vendorRes.json()
-      setVendor(vendorData)
-      await loadQuestions(vendorData)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load assessment')
-      setLoadingQuestions(false)
-    } finally {
       setLoadingVendor(false)
+      setLoadingQuestions(false)
     }
-  }, [vendorId, loadQuestions])
+  }, [vendorId])
 
   useEffect(() => {
-    loadVendor()
-  }, [loadVendor])
-
-  const handleAutofill = async () => {
-    if (!questions.length) return
-    setAutofilling(true)
-    setError('')
-    try {
-      const res = await fetch('/api/documents/suggest-responses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vendorId, questions }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.details || data.error || 'Autofill failed')
-      }
-      setResponses((prev) => ({ ...prev, ...data }))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Autofill failed')
-    } finally {
-      setAutofilling(false)
-    }
-  }
-
-  const handleSuggestCurrent = async () => {
-    const currentQuestion = questions[currentIndex]
-    if (!currentQuestion) return
-    setAutofilling(true)
-    setError('')
-    try {
-      const res = await fetch('/api/documents/suggest-responses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vendorId, questions: [currentQuestion] }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.details || data.error || 'Suggestion failed')
-      }
-      const suggestion = data[currentQuestion.id]
-      if (suggestion) {
-        setResponses((prev) => ({ ...prev, [currentQuestion.id]: suggestion }))
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Suggestion failed')
-    } finally {
-      setAutofilling(false)
-    }
-  }
+    loadVendorAndQuestions()
+  }, [loadVendorAndQuestions])
 
   const currentQuestion = questions[currentIndex]
   const isLast = currentIndex === questions.length - 1
@@ -171,13 +110,19 @@ export default function AssessPage() {
     }
   }
 
-  if (loadingVendor && !vendor) {
+  if (loadingVendor || loadingQuestions) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-16">
-        <div className="space-y-4">
-          <CardSkeleton />
-          <Spinner text="Loading vendor profile..." />
-        </div>
+        {vendor ? (
+          <Spinner
+            text={`Generating tailored assessment questions for ${vendor.companyName}...`}
+          />
+        ) : (
+          <div className="space-y-4">
+            <CardSkeleton />
+            <Spinner text="Loading vendor profile..." />
+          </div>
+        )}
       </div>
     )
   }
@@ -198,21 +143,20 @@ export default function AssessPage() {
     )
   }
 
-  if (error && !vendor) {
+  if (error && !questions.length) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-16 text-center">
         <p className="text-danger mb-4">{error}</p>
-        <button onClick={loadVendor} className="text-primary hover:underline">
+        <button onClick={loadVendorAndQuestions} className="text-primary hover:underline">
           Retry
         </button>
       </div>
     )
   }
 
-  if (!vendor) return null
+  if (!currentQuestion || !vendor) return null
 
-  const progress =
-    questions.length > 0 ? ((currentIndex + 1) / questions.length) * 100 : 0
+  const progress = ((currentIndex + 1) / questions.length) * 100
   const categoryColors: Record<string, string> = {
     Security: 'bg-primary/20 text-primary',
     Compliance: 'bg-purple-500/20 text-purple-300',
@@ -221,8 +165,8 @@ export default function AssessPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="font-heading text-2xl font-bold">{vendor.companyName}</h1>
           <p className="text-secondary text-sm">{vendor.serviceType}</p>
@@ -231,112 +175,64 @@ export default function AssessPage() {
       </div>
 
       {error && (
-        <div className="p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm">
+        <div className="mb-4 p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm">
           {error}
         </div>
       )}
 
-      <DocumentUploadPanel
-        vendorId={vendorId}
-        onDocumentsReady={setHasAnalyzedDocs}
-      />
+      <div className="mb-6">
+        <div className="flex justify-between text-sm text-secondary mb-2">
+          <span>Question {currentIndex + 1} of {questions.length}</span>
+          <span>{Math.round(progress)}%</span>
+        </div>
+        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-primary transition-all duration-300"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
 
-      {hasAnalyzedDocs && questions.length > 0 && (
-        <div className="flex flex-wrap gap-3">
+      <div className="bg-card rounded-xl border border-white/10 p-6 sm:p-8">
+        <span
+          className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-4 ${
+            categoryColors[currentQuestion.category] || 'bg-white/10'
+          }`}
+        >
+          {currentQuestion.category}
+        </span>
+        <h2 className="font-heading text-xl font-semibold mb-6 leading-relaxed">
+          {currentQuestion.question}
+        </h2>
+        <textarea
+          rows={8}
+          className="w-full px-4 py-3 rounded-lg bg-navy border border-white/10 text-white placeholder-secondary focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y"
+          placeholder="Enter your detailed response..."
+          value={responses[currentQuestion.id] || ''}
+          onChange={(e) =>
+            setResponses({ ...responses, [currentQuestion.id]: e.target.value })
+          }
+        />
+        <div className="flex flex-col sm:flex-row gap-3 mt-6">
+          {currentIndex > 0 && (
+            <button
+              type="button"
+              onClick={() => setCurrentIndex((i) => i - 1)}
+              className="px-6 py-3 rounded-lg border border-white/20 hover:bg-white/5 transition-colors"
+            >
+              Previous
+            </button>
+          )}
           <button
             type="button"
-            onClick={handleAutofill}
-            disabled={autofilling}
-            className="px-5 py-2.5 rounded-lg bg-primary/20 border border-primary/40 text-primary text-sm font-semibold hover:bg-primary/30 disabled:opacity-50 transition-colors"
+            onClick={goNext}
+            disabled={!responses[currentQuestion.id]?.trim()}
+            className="flex-1 px-6 py-3 rounded-lg bg-primary text-white font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {autofilling ? 'Generating answers from documents…' : 'Autofill all answers from documents'}
-          </button>
-          <p className="text-secondary text-sm self-center">
-            AI drafts responses from your uploaded SOC 2, policies, and other analyzed documents. Review and edit before submitting.
-          </p>
-        </div>
-      )}
-
-      {loadingQuestions ? (
-        <Spinner
-          text={`Generating tailored assessment questions for ${vendor.companyName}...`}
-        />
-      ) : error && !questions.length ? (
-        <div className="text-center py-8">
-          <p className="text-danger mb-4">{error}</p>
-          <button onClick={() => loadQuestions(vendor)} className="text-primary hover:underline">
-            Retry
+            {isLast ? 'Submit Assessment' : 'Save & Continue'}
           </button>
         </div>
-      ) : currentQuestion ? (
-        <>
-          <div>
-            <div className="flex justify-between text-sm text-secondary mb-2">
-              <span>
-                Question {currentIndex + 1} of {questions.length}
-              </span>
-              <span>{Math.round(progress)}%</span>
-            </div>
-            <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-primary transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="bg-card rounded-xl border border-white/10 p-6 sm:p-8">
-            <span
-              className={`inline-block px-3 py-1 rounded-full text-xs font-semibold mb-4 ${
-                categoryColors[currentQuestion.category] || 'bg-white/10'
-              }`}
-            >
-              {currentQuestion.category}
-            </span>
-            <h2 className="font-heading text-xl font-semibold mb-6 leading-relaxed">
-              {currentQuestion.question}
-            </h2>
-            <textarea
-              rows={8}
-              className="w-full px-4 py-3 rounded-lg bg-navy border border-white/10 text-white placeholder-secondary focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y"
-              placeholder="Enter your detailed response..."
-              value={responses[currentQuestion.id] || ''}
-              onChange={(e) =>
-                setResponses({ ...responses, [currentQuestion.id]: e.target.value })
-              }
-            />
-            {hasAnalyzedDocs && (
-              <button
-                type="button"
-                onClick={handleSuggestCurrent}
-                disabled={autofilling}
-                className="mt-3 text-sm text-primary hover:underline disabled:opacity-50"
-              >
-                {autofilling ? 'Suggesting…' : 'Suggest answer from documents'}
-              </button>
-            )}
-            <div className="flex flex-col sm:flex-row gap-3 mt-6">
-              {currentIndex > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setCurrentIndex((i) => i - 1)}
-                  className="px-6 py-3 rounded-lg border border-white/20 hover:bg-white/5 transition-colors"
-                >
-                  Previous
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={goNext}
-                disabled={!responses[currentQuestion.id]?.trim()}
-                className="flex-1 px-6 py-3 rounded-lg bg-primary text-white font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {isLast ? 'Submit Assessment' : 'Save & Continue'}
-              </button>
-            </div>
-          </div>
-        </>
-      ) : null}
+      </div>
     </div>
   )
 }
