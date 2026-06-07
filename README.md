@@ -41,7 +41,7 @@ Mid-size organizations (regional banks, insurance firms, healthcare companies) w
 
 ## Built By
 **Sagar Kadhiwala**
-[LinkedIn](https://www.linkedin.com/in/sagarkadhiwala) | [GitHub](https://github.com/sagarkadhiwala-grctprm/tprm-demo-new)
+[LinkedIn](https://www.linkedin.com/in/skadhiwala) | [GitHub](https://github.com/sagarkadhiwala-grctprm/tprm-demo-new)
 
 ---
 *This is a portfolio/demonstration project. Not intended for production compliance use without additional security review and validation.*
