@@ -1,17 +1,21 @@
 import Link from "next/link";
+import { LINKEDIN_URL, PRODUCT_NAME, TAGLINE } from "@/lib/branding";
 
 export default function HomePage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-20">
       <section className="text-center max-w-4xl mx-auto">
-        <h1 className="font-heading text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 text-balance">
-          TPRM Automation Demo
+        <h1 className="font-heading text-4xl sm:text-5xl lg:text-6xl font-bold mb-4 text-balance">
+          {PRODUCT_NAME}
         </h1>
-        <p className="text-lg sm:text-xl text-secondary mb-10 text-balance">
-          AI-powered third-party risk assessment — reducing vendor onboarding
-          from weeks to hours
+        <p className="text-lg sm:text-xl text-primary font-medium mb-4 text-balance">
+          {TAGLINE}
         </p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
+        <p className="text-base sm:text-lg text-secondary mb-10 text-balance max-w-2xl mx-auto">
+          Replace manual vendor risk workflows with intelligent AI assessment.
+          From vendor intake to executive risk report in minutes — not weeks.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center mb-4">
           <Link
             href="/onboard"
             className="px-8 py-4 rounded-xl bg-primary text-white font-semibold text-lg hover:bg-primary/90 transition-colors shadow-lg shadow-primary/25"
@@ -25,6 +29,17 @@ export default function HomePage() {
             View Risk Dashboard
           </Link>
         </div>
+        <p className="text-secondary/60 text-sm mb-16">
+          by{" "}
+          <a
+            href={LINKEDIN_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-primary transition-colors underline-offset-2 hover:underline"
+          >
+            Sagar Kadhiwala
+          </a>
+        </p>
       </section>
 
       <section className="max-w-5xl mx-auto">

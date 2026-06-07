@@ -22,6 +22,8 @@ export default function DashboardPage() {
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('createdAt')
   const [sortAsc, setSortAsc] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -109,6 +111,28 @@ export default function DashboardPage() {
     }
   }
 
+  const handleDelete = async (vendor: VendorWithAssessment) => {
+    const confirmed = window.confirm(
+      `Delete "${vendor.companyName}"? This will permanently remove the vendor and all associated assessments.`
+    )
+    if (!confirmed) return
+
+    setActionError('')
+    setDeletingId(vendor.id)
+    try {
+      const res = await fetch(`/api/vendors/${vendor.id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.details || data.error || 'Failed to delete vendor')
+      }
+      setVendors((prev) => prev.filter((v) => v.id !== vendor.id))
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to delete vendor')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   const SortHeader = ({
     label,
     col,
@@ -129,7 +153,7 @@ export default function DashboardPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="font-heading text-3xl font-bold">Risk Dashboard</h1>
+          <h1 className="font-heading text-3xl font-bold">VendorSight — Risk Dashboard</h1>
           <p className="text-secondary mt-1">
             Monitor vendor risk tiers and assessment status
           </p>
@@ -145,6 +169,12 @@ export default function DashboardPage() {
       {loadError && (
         <div className="mb-6 rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-danger text-sm">
           Failed to load vendors: {loadError}
+        </div>
+      )}
+
+      {actionError && (
+        <div className="mb-6 rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-danger text-sm">
+          {actionError}
         </div>
       )}
 
@@ -295,6 +325,14 @@ export default function DashboardPage() {
                             >
                               Edit
                             </Link>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(vendor)}
+                              disabled={deletingId === vendor.id}
+                              className="text-sm text-danger hover:text-danger/80 whitespace-nowrap disabled:opacity-50"
+                            >
+                              {deletingId === vendor.id ? 'Deleting…' : 'Delete'}
+                            </button>
                           </div>
                         </td>
                       </tr>

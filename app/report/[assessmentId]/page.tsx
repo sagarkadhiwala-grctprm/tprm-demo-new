@@ -270,6 +270,9 @@ export default function ReportPage() {
       <header className="bg-card rounded-xl border border-white/10 p-6 sm:p-8">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 mb-6">
           <div className="flex-1">
+            <p className="text-primary text-sm font-semibold uppercase tracking-wide mb-2">
+              VendorSight Risk Report
+            </p>
             <h1 className="font-heading text-3xl font-bold mb-2">
               {data.vendor.companyName}
             </h1>

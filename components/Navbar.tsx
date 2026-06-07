@@ -7,9 +7,10 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           <Link
             href="/"
-            className="font-heading text-xl font-semibold text-primary hover:text-primary/80 transition-colors"
+            className="font-heading text-xl font-semibold hover:opacity-90 transition-opacity"
           >
-            TPRM Demo
+            <span className="text-white">Vendor</span>
+            <span className="text-primary">Sight</span>
           </Link>
           <div className="flex items-center gap-4 sm:gap-6">
             <Link

@@ -95,3 +95,34 @@ export async function PATCH(
     )
   }
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    void request
+
+    const vendor = await prisma.vendor.findUnique({
+      where: { id: params.id },
+      select: { id: true },
+    })
+
+    if (!vendor) {
+      return NextResponse.json({ error: 'Vendor not found' }, { status: 404 })
+    }
+
+    await prisma.$transaction([
+      prisma.assessment.deleteMany({ where: { vendorId: params.id } }),
+      prisma.vendor.delete({ where: { id: params.id } }),
+    ])
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Vendor DELETE API error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error', details: String(error) },
+      { status: 500 }
+    )
+  }
+}
