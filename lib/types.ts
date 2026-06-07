@@ -22,7 +22,8 @@ export interface ScoreResult {
   overallScore: number
   riskLevel: 'Low' | 'Medium' | 'High' | 'Critical'
   aiNarrative: string
-  keyFindings: string[]
+  keyStrengths: string[]
+  keyFindings: Array<{ text: string; severity: 'high' | 'medium' | 'low' }>
   recommendations: string[]
 }
 

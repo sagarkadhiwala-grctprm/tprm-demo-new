@@ -11,13 +11,18 @@ import {
   scoreBarColor,
 } from '@/lib/utils'
 import { AssessmentQuestion } from '@/lib/types'
+import {
+  NormalizedAssessmentFindings,
+  gapSeverityColor,
+  gapSeverityIconColor,
+} from '@/lib/assessment-findings'
 
 interface ReportData {
   id: string
   overallScore: number
   riskLevel: string
   aiNarrative: string
-  keyFindings: string[]
+  keyFindings: NormalizedAssessmentFindings
   recommendations: string[]
   completedAt: string
   questions: AssessmentQuestion[]
@@ -444,24 +449,69 @@ export default function ReportPage() {
         </p>
       </section>
 
-      {/* SECTION 6 — Key Findings */}
-      <section className="bg-card rounded-xl border border-white/10 p-6 sm:p-8">
-        <h2 className="font-heading text-xl font-semibold mb-4">Key Findings</h2>
-        <ul className="space-y-3">
-          {data.keyFindings.map((finding, i) => {
-            const isCritical = finding.toLowerCase().includes('critical') || finding.toLowerCase().includes('severe')
-            return (
-              <li key={i} className="flex gap-3 text-sm sm:text-base">
-                <svg className={`w-5 h-5 shrink-0 mt-0.5 ${isCritical ? 'text-danger' : 'text-warning'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <span className={isCritical ? 'text-danger' : 'text-amber-400'}>{finding}</span>
-              </li>
-            )
-          })}
-        </ul>
-      </section>
+      {/* SECTION 6 — Control Strengths & Risk Findings */}
+      {(data.keyFindings.strengths.length > 0 ||
+        data.keyFindings.gaps.length > 0) && (
+        <div className="space-y-6">
+          {data.keyFindings.strengths.length > 0 && (
+            <section className="bg-card rounded-xl border border-success/20 p-6 sm:p-8">
+              <h2 className="font-heading text-xl font-semibold mb-4">
+                Control Strengths
+              </h2>
+              <ul className="space-y-3">
+                {data.keyFindings.strengths.map((strength, i) => (
+                  <li key={i} className="flex gap-3 text-sm sm:text-base">
+                    <svg
+                      className="w-5 h-5 shrink-0 mt-0.5 text-success"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <span className="text-white/90">{strength}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {data.keyFindings.gaps.length > 0 && (
+            <section className="bg-card rounded-xl border border-white/10 p-6 sm:p-8">
+              <h2 className="font-heading text-xl font-semibold mb-4">
+                Risk Findings & Gaps
+              </h2>
+              <ul className="space-y-3">
+                {data.keyFindings.gaps.map((finding, i) => (
+                  <li key={i} className="flex gap-3 text-sm sm:text-base">
+                    <svg
+                      className={`w-5 h-5 shrink-0 mt-0.5 ${gapSeverityIconColor(finding.severity)}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                      />
+                    </svg>
+                    <span className={gapSeverityColor(finding.severity)}>
+                      {finding.text}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+      )}
 
       {/* SECTION 7 — Recommendations */}
       <section className="bg-card rounded-xl border border-white/10 p-6 sm:p-8">

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { safeJsonParse } from '@/lib/json'
+import { normalizeAssessmentFindings } from '@/lib/assessment-findings'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -28,7 +29,9 @@ export async function GET(
       questions: safeJsonParse(assessment.questions, []),
       responses: safeJsonParse(assessment.responses, {}),
       scores: safeJsonParse(assessment.scores, {}),
-      keyFindings: safeJsonParse(assessment.keyFindings, []),
+      keyFindings: normalizeAssessmentFindings(
+        safeJsonParse(assessment.keyFindings, [])
+      ),
       recommendations: safeJsonParse(assessment.recommendations, []),
       documentAnalysis: assessment.documentAnalysis
         ? safeJsonParse(assessment.documentAnalysis, null)

@@ -99,7 +99,10 @@ Return ONLY a valid JSON object, no markdown, no backticks, no explanation:
   "overallScore": 65,
   "riskLevel": "Medium",
   "aiNarrative": "Write 4-5 sentences summarizing this vendor risk posture with specific observations.",
-  "keyFindings": ["Finding 1", "Finding 2", "Finding 3"],
+  "keyStrengths": ["Positive control observation 1", "Positive control observation 2"],
+  "keyFindings": [
+    { "text": "Specific gap, weakness, or area of concern only", "severity": "medium" }
+  ],
   "recommendations": ["Action 1", "Action 2", "Action 3"]
 }
 
@@ -107,6 +110,10 @@ Rules:
 - scores must include a number 0-100 for EVERY question id: ${questionIds}
 - riskLevel must be exactly one of: Low, Medium, High, Critical
 - overallScore must be a number 0-100
+- keyStrengths: ONLY positive observations about mature controls, certifications, strong practices, and well-implemented safeguards. Do NOT include weaknesses here.
+- keyFindings: ONLY gaps, weaknesses, missing controls, unclear processes, or areas needing improvement. Do NOT repeat strengths. Each item must be an object with "text" and "severity" (high, medium, or low).
+- severity "high" = material risk or critical control gap; "medium" = notable gap needing remediation; "low" = minor improvement area
+- recommendations must address the keyFindings gaps, not restate strengths
 - return ONLY the JSON object, nothing else`
 
     const response = await anthropic.messages.create({
@@ -142,6 +149,11 @@ Rules:
       result.scores as Record<string, number>
     )
 
+    const storedFindings = {
+      strengths: Array.isArray(result.keyStrengths) ? result.keyStrengths : [],
+      gaps: Array.isArray(result.keyFindings) ? result.keyFindings : [],
+    }
+
     const assessment = await prisma.assessment.create({
       data: {
         vendorId,
@@ -151,7 +163,7 @@ Rules:
         overallScore: Number(result.overallScore),
         riskLevel: result.riskLevel,
         aiNarrative: result.aiNarrative,
-        keyFindings: JSON.stringify(result.keyFindings),
+        keyFindings: JSON.stringify(storedFindings),
         recommendations: JSON.stringify(result.recommendations),
         documentAnalysis: JSON.stringify(documentAnalysisSnapshot),
         status: 'completed',
