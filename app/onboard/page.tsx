@@ -94,7 +94,7 @@ export default function OnboardPage() {
         body: JSON.stringify(form),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Registration failed')
+      if (!res.ok) throw new Error(data.details || data.error || 'Registration failed')
       setSavedVendor({
         id: data.id,
         tier: data.tier,

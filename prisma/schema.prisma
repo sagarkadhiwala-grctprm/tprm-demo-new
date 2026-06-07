@@ -1,86 +1,86 @@
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-model Vendor {
-  id                  String           @id @default(cuid())
-  companyName         String
-  serviceType         String
-  dataTypes           String
-  contactEmail        String
-  contactName         String
-  country             String
-  employeeCount       String
-  tier                Int
-  tierRationale       String
-  status              String           @default("pending_assessment")
-  natureOfBusiness    String?
-  productsServices    String?
-  dataCategories      String?
-  dataVolume          String?
-  dataRetentionPeriod String?
-  geographicPresence  String?
-  certifications      String?
-  regulatoryBodies    String?
-  inherentLikelihood  Int?
-  inherentImpact      Int?
-  inherentRiskScore   Int?
-  inherentRiskRating  String?
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
-  assessments         Assessment[]
-  documents           VendorDocument[]
-}
-
-model VendorDocument {
-  id            String   @id @default(cuid())
-  vendorId      String
-  vendor        Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  fileName      String
-  mimeType      String
-  documentType  String
-  extractedText String
-  fileSize      Int
-  status        String   @default("uploaded")
-  aiAnalysis    String?
-  overallRisk   String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-}
-
-model Assessment {
-  id                        String    @id @default(cuid())
-  vendorId                  String
-  vendor                    Vendor    @relation(fields: [vendorId], references: [id])
-  questions                 String
-  responses                 String
-  scores                    String
-  overallScore              Int
-  riskLevel                 String
-  aiNarrative               String
-  keyFindings               String
-  recommendations           String
-  controlEffectivenessScore Int?
-  residualLikelihood        Int?
-  residualImpact            Int?
-  residualRiskScore         Int?
-  residualRiskRating        String?
-  risksIdentified           Int?
-  criticalRisks             Int?
-  highRisks                 Int?
-  mediumRisks               Int?
-  lowRisks                  Int?
-  approvalStatus            String    @default("pending")
-  approvalNotes             String?
-  approvedBy                String?
-  approvedAt                DateTime?
-  documentAnalysis          String?
-  completedAt               DateTime  @default(now())
-  status                    String    @default("completed")
-}
-
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Vendor {
+  id                  String           @id @default(cuid())
+  companyName         String
+  serviceType         String
+  dataTypes           String
+  contactEmail        String
+  contactName         String
+  country             String
+  employeeCount       String
+  tier                Int
+  tierRationale       String
+  status              String           @default("pending_assessment")
+  natureOfBusiness    String?
+  productsServices    String?
+  dataCategories      String?
+  dataVolume          String?
+  dataRetentionPeriod String?
+  geographicPresence  String?
+  certifications      String?
+  regulatoryBodies    String?
+  inherentLikelihood  Int?
+  inherentImpact      Int?
+  inherentRiskScore   Int?
+  inherentRiskRating  String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  assessments         Assessment[]
+  documents           VendorDocument[]
+}
+
+model VendorDocument {
+  id            String   @id @default(cuid())
+  vendorId      String
+  vendor        Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  fileName      String
+  mimeType      String
+  documentType  String
+  extractedText String
+  fileSize      Int
+  status        String   @default("uploaded")
+  aiAnalysis    String?
+  overallRisk   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Assessment {
+  id                        String    @id @default(cuid())
+  vendorId                  String
+  vendor                    Vendor    @relation(fields: [vendorId], references: [id])
+  questions                 String
+  responses                 String
+  scores                    String
+  overallScore              Int
+  riskLevel                 String
+  aiNarrative               String
+  keyFindings               String
+  recommendations           String
+  controlEffectivenessScore Int?
+  residualLikelihood        Int?
+  residualImpact            Int?
+  residualRiskScore         Int?
+  residualRiskRating        String?
+  risksIdentified           Int?
+  criticalRisks             Int?
+  highRisks                 Int?
+  mediumRisks               Int?
+  lowRisks                  Int?
+  approvalStatus            String    @default("pending")
+  approvalNotes             String?
+  approvedBy                String?
+  approvedAt                DateTime?
+  documentAnalysis          String?
+  completedAt               DateTime  @default(now())
+  status                    String    @default("completed")
+}
+

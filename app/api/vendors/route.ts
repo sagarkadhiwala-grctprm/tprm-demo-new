@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/prisma'
+import { hasDatabaseConfig } from '@/lib/db-env'
 import { calculateInherentRisk } from '@/lib/inherent-risk'
 
 export const dynamic = 'force-dynamic'
@@ -12,6 +13,13 @@ const anthropic = new Anthropic({
 
 export async function GET(request: Request) {
   try {
+    if (!hasDatabaseConfig()) {
+      return NextResponse.json(
+        { error: 'Database not configured', details: 'DATABASE_URL is missing' },
+        { status: 500 }
+      )
+    }
+
     void request
     const vendors = await prisma.vendor.findMany({
       orderBy: { createdAt: 'desc' },
@@ -68,6 +76,20 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    if (!hasDatabaseConfig()) {
+      return NextResponse.json(
+        { error: 'Database not configured', details: 'DATABASE_URL is missing' },
+        { status: 500 }
+      )
+    }
+
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return NextResponse.json(
+        { error: 'AI service not configured', details: 'ANTHROPIC_API_KEY is missing' },
+        { status: 500 }
+      )
+    }
+
     const body = await request.json()
 
     const dataTypesStr = Array.isArray(body.dataTypes)

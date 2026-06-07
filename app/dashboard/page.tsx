@@ -18,6 +18,7 @@ type SortKey =
 export default function DashboardPage() {
   const [vendors, setVendors] = useState<VendorWithAssessment[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('createdAt')
   const [sortAsc, setSortAsc] = useState(false)
@@ -26,10 +27,15 @@ export default function DashboardPage() {
     async function load() {
       try {
         const res = await fetch('/api/vendors')
-        if (!res.ok) throw new Error('Failed to load')
-        setVendors(await res.json())
-      } catch {
+        const data = await res.json()
+        if (!res.ok) {
+          throw new Error(data.details || data.error || 'Failed to load vendors')
+        }
+        setVendors(data)
+      } catch (err) {
+        console.error('Dashboard load error:', err)
         setVendors([])
+        setLoadError(err instanceof Error ? err.message : 'Failed to load vendors')
       } finally {
         setLoading(false)
       }
@@ -135,6 +141,12 @@ export default function DashboardPage() {
           + Register Vendor
         </Link>
       </div>
+
+      {loadError && (
+        <div className="mb-6 rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-danger text-sm">
+          Failed to load vendors: {loadError}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         <div className="bg-card rounded-xl border border-white/10 p-5">
