@@ -6,26 +6,6 @@ import Spinner from '@/components/Spinner'
 import VendorDemographicsSection from '@/components/VendorDemographicsSection'
 import { safeJsonParse } from '@/lib/json'
 
-const DATA_OPTIONS = [
-  'Customer PII (names, addresses, SSNs)',
-  'Financial Records & Transactions',
-  'Trading & Market Data',
-  'Employee Data',
-  'Authentication & Credentials',
-  'Internal Systems Access',
-  'No Sensitive Data Access',
-]
-
-const SERVICE_TYPES = [
-  'Technology / SaaS',
-  'Data & Analytics',
-  'Cloud Infrastructure',
-  'Professional Services',
-  'Financial Services',
-  'Facilities & Operations',
-  'Legal & Compliance',
-]
-
 export default function EditVendorPage() {
   const params = useParams()
   const router = useRouter()
@@ -38,20 +18,17 @@ export default function EditVendorPage() {
     contactName: '',
     contactEmail: '',
     serviceType: '',
-    serviceDescription: '',
-    dataTypes: [] as string[],
-    subcontractors: 'no',
-    criticality: '',
-    substitutability: '',
-    // Section 5 - Vendor Profile & Demographics
     natureOfBusiness: '',
     productsServices: '',
     dataCategories: [] as string[],
+    subcontractors: 'no',
     dataVolume: '',
     dataRetentionPeriod: '',
     geographicPresence: [] as string[],
     certifications: [] as string[],
     regulatoryBodies: [] as string[],
+    criticality: '',
+    substitutability: '',
   })
 
   const [loading, setLoading] = useState(true)
@@ -66,11 +43,14 @@ export default function EditVendorPage() {
         if (!res.ok) throw new Error('Failed to load vendor')
         const vendor = await res.json()
 
-        // Parse JSON arrays from database
         const dataCategories = safeJsonParse<string[]>(vendor.dataCategories, [])
         const geographicPresence = safeJsonParse<string[]>(vendor.geographicPresence, [])
         const certifications = safeJsonParse<string[]>(vendor.certifications, [])
         const regulatoryBodies = safeJsonParse<string[]>(vendor.regulatoryBodies, [])
+
+        const legacyDataTypes = vendor.dataTypes
+          ? vendor.dataTypes.split(', ').filter(Boolean)
+          : []
 
         setForm({
           companyName: vendor.companyName || '',
@@ -79,14 +59,13 @@ export default function EditVendorPage() {
           contactName: vendor.contactName || '',
           contactEmail: vendor.contactEmail || '',
           serviceType: vendor.serviceType || '',
-          serviceDescription: '',
-          dataTypes: vendor.dataTypes ? vendor.dataTypes.split(', ') : [],
+          natureOfBusiness: vendor.natureOfBusiness || '',
+          productsServices: vendor.productsServices || '',
+          dataCategories:
+            dataCategories.length > 0 ? dataCategories : legacyDataTypes,
           subcontractors: 'no',
           criticality: '',
           substitutability: '',
-          natureOfBusiness: vendor.natureOfBusiness || '',
-          productsServices: vendor.productsServices || '',
-          dataCategories,
           dataVolume: vendor.dataVolume || '',
           dataRetentionPeriod: vendor.dataRetentionPeriod || '',
           geographicPresence,
@@ -102,26 +81,15 @@ export default function EditVendorPage() {
     loadVendor()
   }, [vendorId])
 
-  const toggleDataType = (label: string) => {
-    setForm((prev) => {
-      let next = [...prev.dataTypes]
-      if (label === 'No Sensitive Data Access') {
-        next = next.includes(label) ? [] : [label]
-      } else {
-        next = next.filter((d) => d !== 'No Sensitive Data Access')
-        if (next.includes(label)) {
-          next = next.filter((d) => d !== label)
-        } else {
-          next.push(label)
-        }
-      }
-      return { ...prev, dataTypes: next }
-    })
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    if (form.dataCategories.length === 0) {
+      setError('Please select at least one data category in Section 2.')
+      return
+    }
+
     setSaving(true)
 
     try {
@@ -227,44 +195,17 @@ export default function EditVendorPage() {
           </div>
         </section>
 
-        <section className="bg-card rounded-xl border border-white/10 p-6 space-y-4">
-          <h2 className="font-heading text-xl font-semibold border-b border-white/10 pb-3">
-            Section 2 — Services
-          </h2>
-          <div>
-            <label className={labelClass}>Type of Service *</label>
-            <select required className={inputClass} value={form.serviceType}
-              onChange={(e) => setForm({ ...form, serviceType: e.target.value })}>
-              <option value="">Select service type</option>
-              {SERVICE_TYPES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-        </section>
+        <VendorDemographicsSection
+          form={form}
+          onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+          inputClass={inputClass}
+          labelClass={labelClass}
+          sectionNumber={2}
+        />
 
         <section className="bg-card rounded-xl border border-white/10 p-6 space-y-4">
           <h2 className="font-heading text-xl font-semibold border-b border-white/10 pb-3">
-            Section 3 — Data Access
-          </h2>
-          <div>
-            <label className={labelClass}>What data will this vendor access? *</label>
-            <div className="space-y-2 mt-2">
-              {DATA_OPTIONS.map((opt) => (
-                <label key={opt} className="flex items-start gap-3 cursor-pointer">
-                  <input type="checkbox" checked={form.dataTypes.includes(opt)}
-                    onChange={() => toggleDataType(opt)}
-                    className="mt-1 rounded border-white/20" />
-                  <span className="text-sm">{opt}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="bg-card rounded-xl border border-white/10 p-6 space-y-4">
-          <h2 className="font-heading text-xl font-semibold border-b border-white/10 pb-3">
-            Section 4 — Operational
+            Section 3 — Operational
           </h2>
           <div>
             <label className={labelClass}>Business criticality if vendor is unavailable *</label>
@@ -289,13 +230,6 @@ export default function EditVendorPage() {
             </select>
           </div>
         </section>
-
-        <VendorDemographicsSection
-          form={form}
-          onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
-          inputClass={inputClass}
-          labelClass={labelClass}
-        />
 
         <div className="flex gap-4">
           <button

@@ -33,14 +33,12 @@ export interface VendorFormData {
   contactName: string
   contactEmail: string
   serviceType: string
-  serviceDescription: string
-  dataTypes: string[]
+  natureOfBusiness?: string
+  productsServices: string
+  dataCategories: string[]
   subcontractors: string
   criticality: string
   substitutability: string
-  natureOfBusiness?: string
-  productsServices?: string
-  dataCategories?: string[]
   dataVolume?: string
   dataRetentionPeriod?: string
   geographicPresence?: string[]

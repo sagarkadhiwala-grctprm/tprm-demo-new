@@ -7,12 +7,15 @@ import {
   DATA_VOLUME_OPTIONS,
   GEOGRAPHIC_OPTIONS,
   REGULATORY_BODY_OPTIONS,
+  SERVICE_TYPES,
 } from '@/lib/vendor-form-constants'
 
-export interface DemographicsFormSlice {
+export interface VendorProfileFormSlice {
+  serviceType: string
   natureOfBusiness: string
   productsServices: string
   dataCategories: string[]
+  subcontractors: string
   dataVolume: string
   dataRetentionPeriod: string
   geographicPresence: string[]
@@ -21,10 +24,11 @@ export interface DemographicsFormSlice {
 }
 
 interface Props {
-  form: DemographicsFormSlice
-  onChange: (patch: Partial<DemographicsFormSlice>) => void
+  form: VendorProfileFormSlice
+  onChange: (patch: Partial<VendorProfileFormSlice>) => void
   inputClass: string
   labelClass: string
+  sectionNumber?: number
 }
 
 export default function VendorDemographicsSection({
@@ -32,10 +36,11 @@ export default function VendorDemographicsSection({
   onChange,
   inputClass,
   labelClass,
+  sectionNumber = 2,
 }: Props) {
   const toggleList = (
     field: keyof Pick<
-      DemographicsFormSlice,
+      VendorProfileFormSlice,
       'dataCategories' | 'geographicPresence' | 'certifications' | 'regulatoryBodies'
     >,
     label: string,
@@ -58,8 +63,24 @@ export default function VendorDemographicsSection({
   return (
     <section className="bg-card rounded-xl border border-white/10 p-6 space-y-4">
       <h2 className="font-heading text-xl font-semibold border-b border-white/10 pb-3">
-        Section 5 — Vendor Profile & Demographics
+        Section {sectionNumber} — Vendor Profile & Demographics
       </h2>
+      <div>
+        <label className={labelClass}>Type of service *</label>
+        <select
+          required
+          className={inputClass}
+          value={form.serviceType}
+          onChange={(e) => onChange({ serviceType: e.target.value })}
+        >
+          <option value="">Select service type</option>
+          {SERVICE_TYPES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+      </div>
       <div>
         <label className={labelClass}>Nature of business</label>
         <input
@@ -70,17 +91,18 @@ export default function VendorDemographicsSection({
         />
       </div>
       <div>
-        <label className={labelClass}>Products/Services description</label>
+        <label className={labelClass}>Products/services description *</label>
         <textarea
+          required
           rows={3}
           className={inputClass}
-          placeholder="Detailed description of products/services"
+          placeholder="Describe what services this vendor will provide"
           value={form.productsServices}
           onChange={(e) => onChange({ productsServices: e.target.value })}
         />
       </div>
       <div>
-        <label className={labelClass}>Types of data accessed/stored</label>
+        <label className={labelClass}>Types of data accessed/stored *</label>
         <div className="space-y-2 mt-2">
           {DATA_CATEGORY_OPTIONS.map((opt) => (
             <label key={opt} className="flex items-start gap-3 cursor-pointer">
@@ -93,6 +115,24 @@ export default function VendorDemographicsSection({
                 className="mt-1 rounded border-white/20"
               />
               <span className="text-sm">{opt}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+      <div>
+        <label className={labelClass}>Will they use sub-contractors? *</label>
+        <div className="flex gap-6 mt-2">
+          {['yes', 'no'].map((v) => (
+            <label key={v} className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="subcontractors"
+                value={v}
+                required
+                checked={form.subcontractors === v}
+                onChange={() => onChange({ subcontractors: v })}
+              />
+              <span className="capitalize">{v}</span>
             </label>
           ))}
         </div>

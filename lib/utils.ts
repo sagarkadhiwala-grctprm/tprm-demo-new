@@ -1,29 +1,39 @@
 export function predictTier(
-  dataTypes: string[],
+  dataCategories: string[],
   criticality: string
 ): number {
-  const hasPII = dataTypes.includes('Customer PII (names, addresses, SSNs)')
-  const hasFinancial = dataTypes.includes(
-    'Financial Records & Transactions'
+  const hasPII = dataCategories.some(
+    (c) => c.includes('PII') || c.includes('Personal Identifiable')
   )
-  const hasNoSensitive = dataTypes.includes('No Sensitive Data Access')
-  const sensitiveLabels = [
-    'Customer PII (names, addresses, SSNs)',
-    'Financial Records & Transactions',
-    'Trading & Market Data',
-    'Employee Data',
-    'Authentication & Credentials',
-    'Internal Systems Access',
+  const hasFinancial = dataCategories.some((c) => c.includes('Financial'))
+  const hasTrading = dataCategories.some((c) => c.includes('Trading'))
+  const hasNoSensitive = dataCategories.includes('No Sensitive Data')
+  const sensitivePatterns = [
+    'PII',
+    'Personal Identifiable',
+    'Financial',
+    'Trading',
+    'Employee',
+    'Authentication',
+    'Intellectual',
+    'Health',
   ]
-  const hasSensitive = dataTypes.some((d) => sensitiveLabels.includes(d))
+  const hasSensitive = dataCategories.some(
+    (c) =>
+      c !== 'No Sensitive Data' &&
+      sensitivePatterns.some((p) => c.includes(p))
+  )
 
-  if ((hasPII && hasFinancial) || criticality.startsWith('Critical')) {
+  if ((hasPII && hasFinancial) || hasTrading || criticality.startsWith('Critical')) {
     return 1
   }
   if (hasSensitive || criticality.startsWith('High')) {
     return 2
   }
-  if (hasNoSensitive && (criticality.startsWith('Medium') || criticality.startsWith('Low'))) {
+  if (
+    hasNoSensitive &&
+    (criticality.startsWith('Medium') || criticality.startsWith('Low'))
+  ) {
     return 3
   }
   return 2

@@ -7,26 +7,6 @@ import Spinner from '@/components/Spinner'
 import VendorDemographicsSection from '@/components/VendorDemographicsSection'
 import { predictTier } from '@/lib/utils'
 
-const DATA_OPTIONS = [
-  'Customer PII (names, addresses, SSNs)',
-  'Financial Records & Transactions',
-  'Trading & Market Data',
-  'Employee Data',
-  'Authentication & Credentials',
-  'Internal Systems Access',
-  'No Sensitive Data Access',
-]
-
-const SERVICE_TYPES = [
-  'Technology / SaaS',
-  'Data & Analytics',
-  'Cloud Infrastructure',
-  'Professional Services',
-  'Financial Services',
-  'Facilities & Operations',
-  'Legal & Compliance',
-]
-
 interface SavedVendor {
   id: string
   tier: number
@@ -41,49 +21,36 @@ export default function OnboardPage() {
     contactName: '',
     contactEmail: '',
     serviceType: '',
-    serviceDescription: '',
-    dataTypes: [] as string[],
-    subcontractors: 'no',
-    criticality: '',
-    substitutability: '',
     natureOfBusiness: '',
     productsServices: '',
     dataCategories: [] as string[],
+    subcontractors: 'no',
     dataVolume: '',
     dataRetentionPeriod: '',
     geographicPresence: [] as string[],
     certifications: [] as string[],
     regulatoryBodies: [] as string[],
+    criticality: '',
+    substitutability: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [savedVendor, setSavedVendor] = useState<SavedVendor | null>(null)
 
   const predictedTier = useMemo(
-    () => predictTier(form.dataTypes, form.criticality),
-    [form.dataTypes, form.criticality]
+    () => predictTier(form.dataCategories, form.criticality),
+    [form.dataCategories, form.criticality]
   )
-
-  const toggleDataType = (label: string) => {
-    setForm((prev) => {
-      let next = [...prev.dataTypes]
-      if (label === 'No Sensitive Data Access') {
-        next = next.includes(label) ? [] : [label]
-      } else {
-        next = next.filter((d) => d !== 'No Sensitive Data Access')
-        if (next.includes(label)) {
-          next = next.filter((d) => d !== label)
-        } else {
-          next.push(label)
-        }
-      }
-      return { ...prev, dataTypes: next }
-    })
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    if (form.dataCategories.length === 0) {
+      setError('Please select at least one data category in Section 2.')
+      return
+    }
+
     setLoading(true)
     setSavedVendor(null)
 
@@ -200,64 +167,17 @@ export default function OnboardPage() {
           </div>
         </section>
 
-        <section className="bg-card rounded-xl border border-white/10 p-6 space-y-4">
-          <h2 className="font-heading text-xl font-semibold border-b border-white/10 pb-3">
-            Section 2 — Services
-          </h2>
-          <div>
-            <label className={labelClass}>Type of Service *</label>
-            <select required className={inputClass} value={form.serviceType}
-              onChange={(e) => setForm({ ...form, serviceType: e.target.value })}>
-              <option value="">Select service type</option>
-              {SERVICE_TYPES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>Service Description *</label>
-            <textarea required rows={4} className={inputClass}
-              placeholder="Describe what services you will provide"
-              value={form.serviceDescription}
-              onChange={(e) => setForm({ ...form, serviceDescription: e.target.value })} />
-          </div>
-        </section>
+        <VendorDemographicsSection
+          form={form}
+          onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+          inputClass={inputClass}
+          labelClass={labelClass}
+          sectionNumber={2}
+        />
 
         <section className="bg-card rounded-xl border border-white/10 p-6 space-y-4">
           <h2 className="font-heading text-xl font-semibold border-b border-white/10 pb-3">
-            Section 3 — Data Access
-          </h2>
-          <div>
-            <label className={labelClass}>What data will this vendor access? *</label>
-            <div className="space-y-2 mt-2">
-              {DATA_OPTIONS.map((opt) => (
-                <label key={opt} className="flex items-start gap-3 cursor-pointer">
-                  <input type="checkbox" checked={form.dataTypes.includes(opt)}
-                    onChange={() => toggleDataType(opt)}
-                    className="mt-1 rounded border-white/20" />
-                  <span className="text-sm">{opt}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className={labelClass}>Will they use sub-contractors? *</label>
-            <div className="flex gap-6 mt-2">
-              {['yes', 'no'].map((v) => (
-                <label key={v} className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" name="subcontractors" value={v} required
-                    checked={form.subcontractors === v}
-                    onChange={() => setForm({ ...form, subcontractors: v })} />
-                  <span className="capitalize">{v}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="bg-card rounded-xl border border-white/10 p-6 space-y-4">
-          <h2 className="font-heading text-xl font-semibold border-b border-white/10 pb-3">
-            Section 4 — Operational
+            Section 3 — Operational
           </h2>
           <div>
             <label className={labelClass}>Business criticality if vendor is unavailable *</label>
@@ -282,13 +202,6 @@ export default function OnboardPage() {
             </select>
           </div>
         </section>
-
-        <VendorDemographicsSection
-          form={form}
-          onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
-          inputClass={inputClass}
-          labelClass={labelClass}
-        />
 
         <div className="bg-card rounded-xl border border-primary/30 p-6">
           <p className="text-sm text-secondary mb-2">Live tier preview (client-side estimate)</p>

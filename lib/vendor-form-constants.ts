@@ -1,3 +1,13 @@
+export const SERVICE_TYPES = [
+  'Technology / SaaS',
+  'Data & Analytics',
+  'Cloud Infrastructure',
+  'Professional Services',
+  'Financial Services',
+  'Facilities & Operations',
+  'Legal & Compliance',
+] as const
+
 export const DATA_CATEGORY_OPTIONS = [
   'Personal Identifiable Information (PII)',
   'Financial & Payment Data',
@@ -51,3 +61,18 @@ export const DATA_RETENTION_OPTIONS = [
   { value: '3-5 years', label: '3-5 years' },
   { value: '> 5 years', label: '> 5 years' },
 ] as const
+
+/** Build the legacy dataTypes string from dataCategories (or fallback dataTypes). */
+export function formatDataAccessSummary(
+  dataCategories?: string[] | null,
+  dataTypes?: string[] | string | null
+): string {
+  if (Array.isArray(dataCategories) && dataCategories.length > 0) {
+    return dataCategories.join(', ')
+  }
+  if (Array.isArray(dataTypes) && dataTypes.length > 0) {
+    return dataTypes.join(', ')
+  }
+  if (typeof dataTypes === 'string' && dataTypes) return dataTypes
+  return ''
+}

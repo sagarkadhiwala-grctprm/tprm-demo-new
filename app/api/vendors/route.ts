@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/prisma'
 import { hasDatabaseConfig } from '@/lib/db-env'
 import { calculateInherentRisk } from '@/lib/inherent-risk'
+import { formatDataAccessSummary } from '@/lib/vendor-form-constants'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -92,9 +93,7 @@ export async function POST(request: Request) {
 
     const body = await request.json()
 
-    const dataTypesStr = Array.isArray(body.dataTypes)
-      ? body.dataTypes.join(', ')
-      : String(body.dataTypes ?? '')
+    const dataTypesStr = formatDataAccessSummary(body.dataCategories, body.dataTypes)
 
     const inherentRisk = calculateInherentRisk({
       dataCategories: body.dataCategories,
@@ -120,9 +119,10 @@ impact. Requires lightweight review.
 
 Vendor Profile:
 - Company: ${body.companyName}
-- Service Type: ${body.serviceType}  
-- Service Description: ${body.serviceDescription}
-- Data Access: ${dataTypesStr}
+- Service Type: ${body.serviceType}
+- Nature of Business: ${body.natureOfBusiness || 'Not specified'}
+- Products/Services: ${body.productsServices || 'Not specified'}
+- Data Categories: ${dataTypesStr}
 - Business Criticality: ${body.criticality}
 - Substitutability: ${body.substitutability}
 - Uses Sub-contractors: ${body.subcontractors}
@@ -171,7 +171,7 @@ Return ONLY a valid JSON object, no markdown, no backticks, no explanation:
         tierRationale: classification.rationale,
         status: 'pending_assessment',
         natureOfBusiness: body.natureOfBusiness ?? null,
-        productsServices: body.productsServices ?? body.serviceDescription ?? null,
+        productsServices: body.productsServices ?? null,
         dataCategories: Array.isArray(body.dataCategories)
           ? JSON.stringify(body.dataCategories)
           : null,

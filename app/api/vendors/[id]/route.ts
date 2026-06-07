@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { calculateInherentRisk } from '@/lib/inherent-risk'
+import { formatDataAccessSummary } from '@/lib/vendor-form-constants'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -41,9 +42,7 @@ export async function PATCH(
   try {
     const body = await request.json()
 
-    const dataTypesStr = Array.isArray(body.dataTypes)
-      ? body.dataTypes.join(', ')
-      : String(body.dataTypes ?? '')
+    const dataTypesStr = formatDataAccessSummary(body.dataCategories, body.dataTypes)
 
     const inherentRisk = calculateInherentRisk({
       dataCategories: body.dataCategories,
