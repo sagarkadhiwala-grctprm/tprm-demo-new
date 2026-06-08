@@ -1,9 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { env } from '@/lib/env'
 
 export const CLAUDE_MODEL = 'claude-haiku-4-5-20251001'
 
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+  apiKey: env.ANTHROPIC_API_KEY,
 })
 
 export function parseClaudeJson<T>(text: string): T {

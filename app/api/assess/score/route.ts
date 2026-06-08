@@ -1,17 +1,32 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/prisma'
+import { env } from '@/lib/env'
 import { calculateResidualRisk } from '@/lib/inherent-risk'
+import { checkRateLimit } from '@/lib/ratelimit'
+import { getClientIp, sanitize } from '@/lib/sanitize'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+  apiKey: env.ANTHROPIC_API_KEY,
 })
 
 export async function POST(request: Request) {
   try {
+    const ip = getClientIp(request)
+    const { success } = checkRateLimit(ip)
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please wait a minute.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': '60' },
+        }
+      )
+    }
+
     const body = await request.json()
     const { vendorId, questions, responses } = body
 
@@ -22,8 +37,15 @@ export async function POST(request: Request) {
       )
     }
 
+    const sanitizedResponses: Record<string, string> = {}
+    for (const [key, value] of Object.entries(responses)) {
+      if (typeof value === 'string') {
+        sanitizedResponses[sanitize(key, 50)] = value.trim().slice(0, 2000)
+      }
+    }
+
     const vendor = await prisma.vendor.findUnique({
-      where: { id: vendorId },
+      where: { id: sanitize(vendorId, 50) },
     })
 
     if (!vendor) {
@@ -35,7 +57,7 @@ export async function POST(request: Request) {
 
     const qaBlock = questions
       .map((q: { id: string; question: string; category: string }) => {
-        const answer = responses[q.id] || '(no answer provided)'
+        const answer = sanitizedResponses[q.id] || '(no answer provided)'
         return `Question ID: ${q.id}\nQuestion: ${q.question}\nCategory: ${q.category}\nAnswer: ${answer}`
       })
       .join('\n\n---\n\n')
@@ -96,7 +118,7 @@ Rules:
       result = JSON.parse(cleaned)
     } catch {
       return NextResponse.json(
-        { error: 'AI returned invalid JSON', raw: cleaned },
+        { error: 'AI returned invalid JSON' },
         { status: 500 }
       )
     }
@@ -117,9 +139,9 @@ Rules:
 
     const assessment = await prisma.assessment.create({
       data: {
-        vendorId,
+        vendorId: vendor.id,
         questions: JSON.stringify(questions),
-        responses: JSON.stringify(responses),
+        responses: JSON.stringify(sanitizedResponses),
         scores: JSON.stringify(result.scores),
         overallScore: Number(result.overallScore),
         riskLevel: result.riskLevel,
@@ -142,16 +164,13 @@ Rules:
     })
 
     await prisma.vendor.update({
-      where: { id: vendorId },
+      where: { id: vendor.id },
       data: { status: 'completed' },
     })
 
     return NextResponse.json(assessment)
   } catch (error) {
     console.error('Score API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error', details: String(error) },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

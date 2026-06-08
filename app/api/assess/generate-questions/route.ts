@@ -1,19 +1,37 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { env } from '@/lib/env'
+import { checkRateLimit } from '@/lib/ratelimit'
+import { getClientIp, sanitize } from '@/lib/sanitize'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+  apiKey: env.ANTHROPIC_API_KEY,
 })
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { companyName, serviceType, dataTypes, tier } = body
+    const ip = getClientIp(request)
+    const { success } = checkRateLimit(ip)
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please wait a minute.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': '60' },
+        }
+      )
+    }
 
-    if (!companyName || !serviceType || dataTypes === undefined || tier === undefined) {
+    const body = await request.json()
+    const companyName = sanitize(body.companyName, 200)
+    const serviceType = sanitize(body.serviceType, 100)
+    const dataTypes = sanitize(body.dataTypes, 500)
+    const tier = Number(body.tier)
+
+    if (!companyName || !serviceType || !dataTypes || Number.isNaN(tier)) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -68,7 +86,7 @@ Generate exactly 8 questions total.`
       questions = JSON.parse(cleaned)
     } catch {
       return NextResponse.json(
-        { error: 'AI returned invalid JSON', raw: cleaned },
+        { error: 'AI returned invalid JSON' },
         { status: 500 }
       )
     }
@@ -83,9 +101,6 @@ Generate exactly 8 questions total.`
     return NextResponse.json(questions)
   } catch (error) {
     console.error('Generate questions API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error', details: String(error) },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

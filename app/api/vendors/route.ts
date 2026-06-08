@@ -1,22 +1,25 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/prisma'
+import { env } from '@/lib/env'
 import { hasDatabaseConfig } from '@/lib/db-env'
 import { calculateInherentRisk } from '@/lib/inherent-risk'
 import { formatDataAccessSummary } from '@/lib/vendor-form-constants'
+import { checkRateLimit } from '@/lib/ratelimit'
+import { getClientIp, sanitize, sanitizeStringArray } from '@/lib/sanitize'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+  apiKey: env.ANTHROPIC_API_KEY,
 })
 
 export async function GET(request: Request) {
   try {
     if (!hasDatabaseConfig()) {
       return NextResponse.json(
-        { error: 'Database not configured', details: 'DATABASE_URL is missing' },
+        { error: 'Database not configured' },
         { status: 500 }
       )
     }
@@ -68,40 +71,81 @@ export async function GET(request: Request) {
     return NextResponse.json(result)
   } catch (error) {
     console.error('Vendors GET API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error', details: String(error) },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
   try {
-    if (!hasDatabaseConfig()) {
+    const ip = getClientIp(request)
+    const { success } = checkRateLimit(ip)
+    if (!success) {
       return NextResponse.json(
-        { error: 'Database not configured', details: 'DATABASE_URL is missing' },
-        { status: 500 }
+        { error: 'Too many requests. Please wait a minute.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': '60' },
+        }
       )
     }
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!hasDatabaseConfig()) {
       return NextResponse.json(
-        { error: 'AI service not configured', details: 'ANTHROPIC_API_KEY is missing' },
+        { error: 'Database not configured' },
         { status: 500 }
       )
     }
 
     const body = await request.json()
 
-    const dataTypesStr = formatDataAccessSummary(body.dataCategories, body.dataTypes)
+    if (!body.companyName || typeof body.companyName !== 'string') {
+      return NextResponse.json(
+        { error: 'Company name is required' },
+        { status: 400 }
+      )
+    }
+
+    const sanitizedBody = {
+      companyName: sanitize(body.companyName, 200),
+      serviceType: sanitize(body.serviceType, 100),
+      serviceDescription: sanitize(body.serviceDescription, 1000),
+      contactEmail: sanitize(body.contactEmail, 200),
+      contactName: sanitize(body.contactName, 200),
+      country: sanitize(body.country, 100),
+      employeeCount: sanitize(body.employeeCount, 50),
+      dataVolume: sanitize(body.dataVolume, 50),
+      dataRetentionPeriod: sanitize(body.dataRetentionPeriod, 50),
+      criticality: sanitize(body.criticality, 100),
+      substitutability: sanitize(body.substitutability, 100),
+      natureOfBusiness: sanitize(body.natureOfBusiness, 500),
+      productsServices: sanitize(body.productsServices, 1000),
+      subcontractors: sanitize(body.subcontractors, 10),
+      dataTypes: sanitizeStringArray(body.dataTypes, 20),
+      dataCategories: sanitizeStringArray(body.dataCategories, 20),
+      geographicPresence: sanitizeStringArray(body.geographicPresence, 20),
+      certifications: sanitizeStringArray(body.certifications, 20),
+      regulatoryBodies: sanitizeStringArray(body.regulatoryBodies, 20),
+    }
+
+    if (!sanitizedBody.companyName) {
+      return NextResponse.json(
+        { error: 'Company name is required' },
+        { status: 400 }
+      )
+    }
+
+    const dataTypesStr = formatDataAccessSummary(
+      sanitizedBody.dataCategories,
+      sanitizedBody.dataTypes
+    )
 
     const inherentRisk = calculateInherentRisk({
-      dataCategories: body.dataCategories,
-      geographicPresence: body.geographicPresence,
-      certifications: body.certifications,
-      substitutability: body.substitutability,
-      criticality: body.criticality,
-      dataVolume: body.dataVolume,
+      dataCategories: sanitizedBody.dataCategories,
+      geographicPresence: sanitizedBody.geographicPresence,
+      certifications: sanitizedBody.certifications,
+      substitutability: sanitizedBody.substitutability,
+      criticality: sanitizedBody.criticality,
+      dataVolume: sanitizedBody.dataVolume,
     })
 
     const prompt = `You are a senior TPRM (Third Party Risk Management) analyst at a global bank.
@@ -118,14 +162,14 @@ TIER 3 — LOW RISK: Vendor accesses no sensitive data AND has medium or low bus
 impact. Requires lightweight review.
 
 Vendor Profile:
-- Company: ${body.companyName}
-- Service Type: ${body.serviceType}
-- Nature of Business: ${body.natureOfBusiness || 'Not specified'}
-- Products/Services: ${body.productsServices || 'Not specified'}
+- Company: ${sanitizedBody.companyName}
+- Service Type: ${sanitizedBody.serviceType}
+- Nature of Business: ${sanitizedBody.natureOfBusiness || 'Not specified'}
+- Products/Services: ${sanitizedBody.productsServices || sanitizedBody.serviceDescription || 'Not specified'}
 - Data Categories: ${dataTypesStr}
-- Business Criticality: ${body.criticality}
-- Substitutability: ${body.substitutability}
-- Uses Sub-contractors: ${body.subcontractors}
+- Business Criticality: ${sanitizedBody.criticality}
+- Substitutability: ${sanitizedBody.substitutability}
+- Uses Sub-contractors: ${sanitizedBody.subcontractors}
 
 Return ONLY a valid JSON object, no markdown, no backticks, no explanation:
 {
@@ -153,39 +197,43 @@ Return ONLY a valid JSON object, no markdown, no backticks, no explanation:
       classification = JSON.parse(cleaned)
     } catch {
       return NextResponse.json(
-        { error: 'AI returned invalid JSON', raw: cleaned },
+        { error: 'AI returned invalid JSON' },
         { status: 500 }
       )
     }
 
     const vendor = await prisma.vendor.create({
       data: {
-        companyName: body.companyName,
-        serviceType: body.serviceType,
+        companyName: sanitizedBody.companyName,
+        serviceType: sanitizedBody.serviceType,
         dataTypes: dataTypesStr,
-        contactEmail: body.contactEmail,
-        contactName: body.contactName,
-        country: body.country,
-        employeeCount: body.employeeCount,
+        contactEmail: sanitizedBody.contactEmail,
+        contactName: sanitizedBody.contactName,
+        country: sanitizedBody.country,
+        employeeCount: sanitizedBody.employeeCount,
         tier: classification.tier,
         tierRationale: classification.rationale,
         status: 'pending_assessment',
-        natureOfBusiness: body.natureOfBusiness ?? null,
-        productsServices: body.productsServices ?? null,
-        dataCategories: Array.isArray(body.dataCategories)
-          ? JSON.stringify(body.dataCategories)
-          : null,
-        dataVolume: body.dataVolume ?? null,
-        dataRetentionPeriod: body.dataRetentionPeriod ?? null,
-        geographicPresence: Array.isArray(body.geographicPresence)
-          ? JSON.stringify(body.geographicPresence)
-          : null,
-        certifications: Array.isArray(body.certifications)
-          ? JSON.stringify(body.certifications)
-          : null,
-        regulatoryBodies: Array.isArray(body.regulatoryBodies)
-          ? JSON.stringify(body.regulatoryBodies)
-          : null,
+        natureOfBusiness: sanitizedBody.natureOfBusiness || null,
+        productsServices: sanitizedBody.productsServices || null,
+        dataCategories:
+          sanitizedBody.dataCategories.length > 0
+            ? JSON.stringify(sanitizedBody.dataCategories)
+            : null,
+        dataVolume: sanitizedBody.dataVolume || null,
+        dataRetentionPeriod: sanitizedBody.dataRetentionPeriod || null,
+        geographicPresence:
+          sanitizedBody.geographicPresence.length > 0
+            ? JSON.stringify(sanitizedBody.geographicPresence)
+            : null,
+        certifications:
+          sanitizedBody.certifications.length > 0
+            ? JSON.stringify(sanitizedBody.certifications)
+            : null,
+        regulatoryBodies:
+          sanitizedBody.regulatoryBodies.length > 0
+            ? JSON.stringify(sanitizedBody.regulatoryBodies)
+            : null,
         inherentLikelihood: inherentRisk.likelihood,
         inherentImpact: inherentRisk.impact,
         inherentRiskScore: inherentRisk.score,
@@ -199,9 +247,6 @@ Return ONLY a valid JSON object, no markdown, no backticks, no explanation:
     })
   } catch (error) {
     console.error('Vendors POST API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error', details: String(error) },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
