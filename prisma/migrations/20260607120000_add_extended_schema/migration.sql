@@ -1,36 +1,47 @@
--- AlterTable
-ALTER TABLE "Vendor" ADD COLUMN "natureOfBusiness" TEXT;
-ALTER TABLE "Vendor" ADD COLUMN "productsServices" TEXT;
-ALTER TABLE "Vendor" ADD COLUMN "dataCategories" TEXT;
-ALTER TABLE "Vendor" ADD COLUMN "dataVolume" TEXT;
-ALTER TABLE "Vendor" ADD COLUMN "dataRetentionPeriod" TEXT;
-ALTER TABLE "Vendor" ADD COLUMN "geographicPresence" TEXT;
-ALTER TABLE "Vendor" ADD COLUMN "certifications" TEXT;
-ALTER TABLE "Vendor" ADD COLUMN "regulatoryBodies" TEXT;
-ALTER TABLE "Vendor" ADD COLUMN "inherentLikelihood" INTEGER;
-ALTER TABLE "Vendor" ADD COLUMN "inherentImpact" INTEGER;
-ALTER TABLE "Vendor" ADD COLUMN "inherentRiskScore" INTEGER;
-ALTER TABLE "Vendor" ADD COLUMN "inherentRiskRating" TEXT;
+-- Idempotent migration: safe to retry after a partial failure or db push drift
 
--- AlterTable
-ALTER TABLE "Assessment" ADD COLUMN "controlEffectivenessScore" INTEGER;
-ALTER TABLE "Assessment" ADD COLUMN "residualLikelihood" INTEGER;
-ALTER TABLE "Assessment" ADD COLUMN "residualImpact" INTEGER;
-ALTER TABLE "Assessment" ADD COLUMN "residualRiskScore" INTEGER;
-ALTER TABLE "Assessment" ADD COLUMN "residualRiskRating" TEXT;
-ALTER TABLE "Assessment" ADD COLUMN "risksIdentified" INTEGER;
-ALTER TABLE "Assessment" ADD COLUMN "criticalRisks" INTEGER;
-ALTER TABLE "Assessment" ADD COLUMN "highRisks" INTEGER;
-ALTER TABLE "Assessment" ADD COLUMN "mediumRisks" INTEGER;
-ALTER TABLE "Assessment" ADD COLUMN "lowRisks" INTEGER;
-ALTER TABLE "Assessment" ADD COLUMN "approvalStatus" TEXT NOT NULL DEFAULT 'pending';
-ALTER TABLE "Assessment" ADD COLUMN "approvalNotes" TEXT;
-ALTER TABLE "Assessment" ADD COLUMN "approvedBy" TEXT;
-ALTER TABLE "Assessment" ADD COLUMN "approvedAt" TIMESTAMP(3);
-ALTER TABLE "Assessment" ADD COLUMN "documentAnalysis" TEXT;
+-- AlterTable Vendor
+ALTER TABLE "Vendor" ADD COLUMN IF NOT EXISTS "natureOfBusiness" TEXT;
+ALTER TABLE "Vendor" ADD COLUMN IF NOT EXISTS "productsServices" TEXT;
+ALTER TABLE "Vendor" ADD COLUMN IF NOT EXISTS "dataCategories" TEXT;
+ALTER TABLE "Vendor" ADD COLUMN IF NOT EXISTS "dataVolume" TEXT;
+ALTER TABLE "Vendor" ADD COLUMN IF NOT EXISTS "dataRetentionPeriod" TEXT;
+ALTER TABLE "Vendor" ADD COLUMN IF NOT EXISTS "geographicPresence" TEXT;
+ALTER TABLE "Vendor" ADD COLUMN IF NOT EXISTS "certifications" TEXT;
+ALTER TABLE "Vendor" ADD COLUMN IF NOT EXISTS "regulatoryBodies" TEXT;
+ALTER TABLE "Vendor" ADD COLUMN IF NOT EXISTS "inherentLikelihood" INTEGER;
+ALTER TABLE "Vendor" ADD COLUMN IF NOT EXISTS "inherentImpact" INTEGER;
+ALTER TABLE "Vendor" ADD COLUMN IF NOT EXISTS "inherentRiskScore" INTEGER;
+ALTER TABLE "Vendor" ADD COLUMN IF NOT EXISTS "inherentRiskRating" TEXT;
 
--- CreateTable
-CREATE TABLE "VendorDocument" (
+-- AlterTable Assessment
+ALTER TABLE "Assessment" ADD COLUMN IF NOT EXISTS "controlEffectivenessScore" INTEGER;
+ALTER TABLE "Assessment" ADD COLUMN IF NOT EXISTS "residualLikelihood" INTEGER;
+ALTER TABLE "Assessment" ADD COLUMN IF NOT EXISTS "residualImpact" INTEGER;
+ALTER TABLE "Assessment" ADD COLUMN IF NOT EXISTS "residualRiskScore" INTEGER;
+ALTER TABLE "Assessment" ADD COLUMN IF NOT EXISTS "residualRiskRating" TEXT;
+ALTER TABLE "Assessment" ADD COLUMN IF NOT EXISTS "risksIdentified" INTEGER;
+ALTER TABLE "Assessment" ADD COLUMN IF NOT EXISTS "criticalRisks" INTEGER;
+ALTER TABLE "Assessment" ADD COLUMN IF NOT EXISTS "highRisks" INTEGER;
+ALTER TABLE "Assessment" ADD COLUMN IF NOT EXISTS "mediumRisks" INTEGER;
+ALTER TABLE "Assessment" ADD COLUMN IF NOT EXISTS "lowRisks" INTEGER;
+ALTER TABLE "Assessment" ADD COLUMN IF NOT EXISTS "approvalNotes" TEXT;
+ALTER TABLE "Assessment" ADD COLUMN IF NOT EXISTS "approvedBy" TEXT;
+ALTER TABLE "Assessment" ADD COLUMN IF NOT EXISTS "approvedAt" TIMESTAMP(3);
+ALTER TABLE "Assessment" ADD COLUMN IF NOT EXISTS "documentAnalysis" TEXT;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'Assessment' AND column_name = 'approvalStatus'
+  ) THEN
+    ALTER TABLE "Assessment" ADD COLUMN "approvalStatus" TEXT NOT NULL DEFAULT 'pending';
+  END IF;
+END $$;
+
+-- CreateTable VendorDocument
+CREATE TABLE IF NOT EXISTS "VendorDocument" (
     "id" TEXT NOT NULL,
     "vendorId" TEXT NOT NULL,
     "fileName" TEXT NOT NULL,
@@ -47,5 +58,14 @@ CREATE TABLE "VendorDocument" (
     CONSTRAINT "VendorDocument_pkey" PRIMARY KEY ("id")
 );
 
--- AddForeignKey
-ALTER TABLE "VendorDocument" ADD CONSTRAINT "VendorDocument_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "Vendor"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'VendorDocument_vendorId_fkey'
+  ) THEN
+    ALTER TABLE "VendorDocument"
+      ADD CONSTRAINT "VendorDocument_vendorId_fkey"
+      FOREIGN KEY ("vendorId") REFERENCES "Vendor"("id")
+      ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
