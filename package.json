@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "node scripts/prepare-db-env.js && prisma generate && prisma migrate deploy && next build",
+    "postbuild": "node scripts/postbuild-reminder.js",
     "vercel-build": "node scripts/vercel-build.js",
     "start": "next start",
     "lint": "next lint",

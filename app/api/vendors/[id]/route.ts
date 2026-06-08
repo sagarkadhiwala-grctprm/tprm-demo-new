@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { calculateInherentRisk } from '@/lib/inherent-risk'
 import { formatDataAccessSummary } from '@/lib/vendor-form-constants'
+import { requireAdminPassword } from '@/lib/admin-auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -40,6 +41,9 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const unauthorized = requireAdminPassword(request)
+    if (unauthorized) return unauthorized
+
     const body = await request.json()
 
     const dataTypesStr = formatDataAccessSummary(body.dataCategories, body.dataTypes)
@@ -101,7 +105,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    void request
+    const unauthorized = requireAdminPassword(request)
+    if (unauthorized) return unauthorized
 
     const vendor = await prisma.vendor.findUnique({
       where: { id: params.id },

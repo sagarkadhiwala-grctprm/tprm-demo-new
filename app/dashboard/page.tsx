@@ -2,10 +2,16 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import TierBadge from '@/components/TierBadge'
+import AdminPasswordModal from '@/components/AdminPasswordModal'
 import { TableSkeleton } from '@/components/LoadingSkeleton'
 import { formatDate, riskLevelColor } from '@/lib/utils'
 import { VendorWithAssessment } from '@/lib/types'
+import {
+  storeAdminPassword,
+  verifyAdminPassword,
+} from '@/lib/admin-auth-client'
 
 type SortKey =
   | 'companyName'
@@ -15,7 +21,12 @@ type SortKey =
   | 'status'
   | 'createdAt'
 
+type AdminAction =
+  | { type: 'edit'; vendor: VendorWithAssessment }
+  | { type: 'delete'; vendor: VendorWithAssessment }
+
 export default function DashboardPage() {
+  const router = useRouter()
   const [vendors, setVendors] = useState<VendorWithAssessment[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -24,6 +35,8 @@ export default function DashboardPage() {
   const [sortAsc, setSortAsc] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [actionError, setActionError] = useState('')
+  const [adminAction, setAdminAction] = useState<AdminAction | null>(null)
+  const [modalSubmitting, setModalSubmitting] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -111,24 +124,47 @@ export default function DashboardPage() {
     }
   }
 
-  const handleDelete = async (vendor: VendorWithAssessment) => {
-    const confirmed = window.confirm(
-      `Delete "${vendor.companyName}"? This will permanently remove the vendor and all associated assessments.`
-    )
-    if (!confirmed) return
+  const handleAdminSubmit = async (password: string): Promise<boolean> => {
+    if (!adminAction) return false
 
+    setModalSubmitting(true)
     setActionError('')
-    setDeletingId(vendor.id)
+
     try {
-      const res = await fetch(`/api/vendors/${vendor.id}`, { method: 'DELETE' })
+      if (adminAction.type === 'edit') {
+        const ok = await verifyAdminPassword(password)
+        if (!ok) return false
+        storeAdminPassword(password)
+        router.push(`/vendors/${adminAction.vendor.id}/edit`)
+        setAdminAction(null)
+        return true
+      }
+
+      setDeletingId(adminAction.vendor.id)
+      const res = await fetch(`/api/vendors/${adminAction.vendor.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': password,
+        },
+      })
+
+      if (res.status === 401) return false
+
       const data = await res.json()
       if (!res.ok) {
         throw new Error(data.details || data.error || 'Failed to delete vendor')
       }
-      setVendors((prev) => prev.filter((v) => v.id !== vendor.id))
+
+      setVendors((prev) => prev.filter((v) => v.id !== adminAction.vendor.id))
+      setAdminAction(null)
+      return true
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to delete vendor')
+      setActionError(err instanceof Error ? err.message : 'Action failed')
+      setAdminAction(null)
+      return true
     } finally {
+      setModalSubmitting(false)
       setDeletingId(null)
     }
   }
@@ -151,6 +187,16 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+      <AdminPasswordModal
+        open={adminAction !== null}
+        onClose={() => setAdminAction(null)}
+        onSubmit={handleAdminSubmit}
+        confirmLabel={
+          adminAction?.type === 'delete' ? 'Confirm Delete' : 'Continue'
+        }
+        confirmDanger={adminAction?.type === 'delete'}
+        submitting={modalSubmitting}
+      />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="font-heading text-3xl font-bold">VendorSight — Risk Dashboard</h1>
@@ -319,15 +365,20 @@ export default function DashboardPage() {
                                 Start Assessment
                               </Link>
                             )}
-                            <Link
-                              href={`/vendors/${vendor.id}/edit`}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setAdminAction({ type: 'edit', vendor })
+                              }
                               className="text-sm text-secondary hover:text-primary whitespace-nowrap"
                             >
                               Edit
-                            </Link>
+                            </button>
                             <button
                               type="button"
-                              onClick={() => handleDelete(vendor)}
+                              onClick={() =>
+                                setAdminAction({ type: 'delete', vendor })
+                              }
                               disabled={deletingId === vendor.id}
                               className="text-sm text-danger hover:text-danger/80 whitespace-nowrap disabled:opacity-50"
                             >

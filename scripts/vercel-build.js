@@ -23,3 +23,4 @@ try {
 
 console.log('[vercel-build] Building Next.js app...')
 run('npx next build')
+require('./postbuild-reminder')
